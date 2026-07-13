@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { getUser } from '@/lib/auth/user';
 
 export const metadata: Metadata = {
   title: 'Welcome',
@@ -22,7 +23,9 @@ const PRINCIPLES = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getUser();
+
   return (
     <main id="main-content" className="mx-auto max-w-4xl px-6 py-16 sm:py-24">
       <div className="flex flex-wrap items-center gap-3">
@@ -43,24 +46,24 @@ export default function HomePage() {
       </p>
 
       <div className="mt-8 flex flex-wrap gap-3">
-        <Button size="lg" disabled aria-describedby="auth-pending-note">
-          Sign in
-        </Button>
-        <Button size="lg" variant="outline" disabled aria-describedby="auth-pending-note">
-          Create a workspace
-        </Button>
+        {user ? (
+          <Link href="/dashboard" className={buttonVariants({ size: 'lg' })}>
+            Go to your workspace
+          </Link>
+        ) : (
+          <>
+            <Link href="/sign-in" className={buttonVariants({ size: 'lg' })}>
+              Sign in
+            </Link>
+            <Link
+              href="/sign-up"
+              className={buttonVariants({ size: 'lg', variant: 'outline' })}
+            >
+              Create an account
+            </Link>
+          </>
+        )}
       </div>
-      <p id="auth-pending-note" className="mt-3 text-sm text-muted-foreground">
-        Authentication arrives on an upcoming feature branch (
-        <code>feature/supabase-authentication</code>). Until then you can{' '}
-        <Link
-          href="/dashboard"
-          className="font-medium text-primary underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          preview the workspace shell
-        </Link>
-        .
-      </p>
 
       <section aria-labelledby="principles-heading" className="mt-16">
         <h2 id="principles-heading" className="text-xl font-semibold">

@@ -38,8 +38,8 @@ Suggested semantic-version milestones:
 | Branch | Scope | Status |
 | --- | --- | --- |
 | `chore/initial-project-foundation` | Next.js + TS strict + Tailwind + shadcn primitives, env validation (Zod), app shell, health check, Vitest + first unit test, ESLint/Prettier, core docs | 🟨 |
-| `feature/application-shell` | Responsive shell, desktop sidebar, mobile bottom nav, theming tokens | 🟨 |
-| `feature/supabase-authentication` | Supabase Auth: sign-in / sign-up / reset / verify, session handling, route protection | ⬜ |
+| `feature/application-shell` | Responsive shell, desktop sidebar, mobile bottom nav, theming tokens | ✅ |
+| `feature/supabase-authentication` | Supabase Auth: sign-in / sign-up / reset / verify, session handling, route protection | 🟨 |
 | `ci/initial-quality-pipeline` | GitHub Actions: format, lint, typecheck, unit, build (expanded once Supabase lands) | ⬜ |
 
 ## Phase 2 — Multi-tenancy & security
@@ -105,4 +105,6 @@ builder. Extension points are documented in [`FUTURE_ROADMAP.md`](FUTURE_ROADMAP
 ## Current status
 
 - ✅ Repo initialised; `main` baseline (README, LICENSE, .gitignore, this plan).
-- 🟨 `chore/initial-project-foundation` — in progress (first vertical slice).
+- ✅ `chore/initial-project-foundation` — merged (Next.js foundation, tooling, docs).
+- ✅ `feature/application-shell` — merged (responsive shell, nav, theming).
+- 🟨 `feature/supabase-authentication` — in progress (auth flows, session, route protection).
