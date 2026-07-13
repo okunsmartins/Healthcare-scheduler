@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens — clean healthcare SaaS palette.
+ * Light and dark are both defined; severity is always paired with an icon+label
+ * in components, so these colours never carry meaning on their own.
+ */
+@layer base {
+  :root {
+    --background: 210 40% 99%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --primary: 243 75% 59%; /* restrained indigo accent */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 42%;
+
+    --accent: 243 75% 96%;
+    --accent-foreground: 243 75% 30%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 243 75% 59%;
+
+    --critical: 0 72% 45%;
+    --critical-foreground: 0 0% 100%;
+    --warning: 32 90% 44%;
+    --warning-foreground: 0 0% 100%;
+    --safe: 152 60% 36%;
+    --safe-foreground: 0 0% 100%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 96%;
+
+    --primary: 243 75% 68%;
+    --primary-foreground: 222 47% 8%;
+
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 217 33% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 243 40% 22%;
+    --accent-foreground: 243 75% 88%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 243 75% 68%;
+
+    --critical: 0 72% 58%;
+    --critical-foreground: 0 0% 100%;
+    --warning: 32 90% 55%;
+    --warning-foreground: 222 47% 8%;
+    --safe: 152 55% 45%;
+    --safe-foreground: 222 47% 8%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* Respect users who prefer reduced motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Keyboard-only skip link, visually hidden until focused. */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground;
+  }
+}
