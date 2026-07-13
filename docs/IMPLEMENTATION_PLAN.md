@@ -38,7 +38,7 @@ Suggested semantic-version milestones:
 | Branch | Scope | Status |
 | --- | --- | --- |
 | `chore/initial-project-foundation` | Next.js + TS strict + Tailwind + shadcn primitives, env validation (Zod), app shell, health check, Vitest + first unit test, ESLint/Prettier, core docs | 🟨 |
-| `feature/application-shell` | Responsive shell, desktop sidebar, mobile bottom nav, theming tokens | ⬜ |
+| `feature/application-shell` | Responsive shell, desktop sidebar, mobile bottom nav, theming tokens | 🟨 |
 | `feature/supabase-authentication` | Supabase Auth: sign-in / sign-up / reset / verify, session handling, route protection | ⬜ |
 | `ci/initial-quality-pipeline` | GitHub Actions: format, lint, typecheck, unit, build (expanded once Supabase lands) | ⬜ |
 

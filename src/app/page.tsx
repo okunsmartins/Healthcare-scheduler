@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 
@@ -50,8 +51,15 @@ export default function HomePage() {
         </Button>
       </div>
       <p id="auth-pending-note" className="mt-3 text-sm text-muted-foreground">
-        Authentication arrives on the next feature branch (
-        <code>feature/supabase-authentication</code>).
+        Authentication arrives on an upcoming feature branch (
+        <code>feature/supabase-authentication</code>). Until then you can{' '}
+        <Link
+          href="/dashboard"
+          className="font-medium text-primary underline underline-offset-4 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          preview the workspace shell
+        </Link>
+        .
       </p>
 
       <section aria-labelledby="principles-heading" className="mt-16">

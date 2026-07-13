@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { ThemeScript } from '@/components/theme/theme-script';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-dvh font-sans">
+        <ThemeScript />
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
