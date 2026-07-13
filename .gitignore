@@ -52,6 +52,9 @@ Thumbs.db
 !.vscode/settings.json.example
 *.swp
 
+# Claude Code (local agent tooling / preview launch config)
+.claude/
+
 # Vercel
 .vercel
 
