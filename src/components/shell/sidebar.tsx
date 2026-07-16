@@ -5,13 +5,14 @@ import { usePathname } from 'next/navigation';
 import { CalendarCheck } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { isNavItemActive, NAV_ITEMS } from './nav-items';
+import { SignOutButton } from './sign-out-button';
 import { ThemeToggle } from './theme-toggle';
 
 /**
  * Desktop sidebar (≥ md). Fixed to the left edge; the shell reserves space for it with
  * left padding so it never overlaps content. Hidden on mobile, where MobileNav takes over.
  */
-export function Sidebar() {
+export function Sidebar({ userEmail }: { userEmail: string }) {
   const pathname = usePathname();
 
   return (
@@ -58,9 +59,16 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="flex items-center justify-between border-t px-4 py-3">
-        <span className="text-xs text-muted-foreground">MVP · Synthetic data</span>
-        <ThemeToggle />
+      <div className="space-y-2 border-t px-3 py-3">
+        {userEmail ? (
+          <p className="truncate px-1 text-xs text-muted-foreground" title={userEmail}>
+            {userEmail}
+          </p>
+        ) : null}
+        <div className="flex items-center justify-between">
+          <SignOutButton />
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   );

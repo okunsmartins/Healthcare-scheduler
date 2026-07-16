@@ -38,8 +38,8 @@ Suggested semantic-version milestones:
 | Branch | Scope | Status |
 | --- | --- | --- |
 | `chore/initial-project-foundation` | Next.js + TS strict + Tailwind + shadcn primitives, env validation (Zod), app shell, health check, Vitest + first unit test, ESLint/Prettier, core docs | 🟨 |
-| `feature/application-shell` | Responsive shell, desktop sidebar, mobile bottom nav, theming tokens | 🟨 |
-| `feature/supabase-authentication` | Supabase Auth: sign-in / sign-up / reset / verify, session handling, route protection | ⬜ |
+| `feature/application-shell` | Responsive shell, desktop sidebar, mobile bottom nav, theming tokens | ✅ |
+| `feature/supabase-authentication` | Supabase Auth: sign-in / sign-up / reset / verify, session handling, route protection. *(Add: forced password change on first login — see bank-staff ref §3.1.)* | 🟨 |
 | `ci/initial-quality-pipeline` | GitHub Actions: format, lint, typecheck, unit, build (expanded once Supabase lands) | ⬜ |
 
 ## Phase 2 — Multi-tenancy & security
@@ -65,8 +65,15 @@ Suggested semantic-version milestones:
 
 `feature/shift-type-management` · `feature/staffing-requirements` ·
 `feature/roster-periods` · `feature/shift-instances` ·
-`feature/shift-assignment` · `feature/roster-approval` ·
-`feature/roster-publication` · `feature/roster-versioning`
+`feature/booking-patterns` · `feature/shift-assignment` ·
+`feature/roster-approval` · `feature/roster-publication` ·
+`feature/roster-versioning` · `feature/saved-views`
+
+> Bank-staff additions (from [`BANK_STAFF_GAP_ANALYSIS.md`](BANK_STAFF_GAP_ANALYSIS.md) §4):
+> `feature/booking-patterns` (daily/weekly block booking, ref §3.3) and `feature/saved-views`
+> (named favourites + column config + per-user default, ref §3.6–3.7). `feature/shift-instances`
+> also owns the request lifecycle: `unfilled`/`unconfirmed`/`filled`/`unfillable`/`recalled`
+> states, `cancellation_reasons`, and the reopen/recall transitions.
 
 ## Phase 5 — Rules engine
 
@@ -84,7 +91,13 @@ Suggested semantic-version milestones:
 
 `feature/shift-swap-request` · `feature/shift-swap-approval` ·
 `feature/bank-shift-publication` · `feature/bank-shift-eligibility` ·
-`feature/atomic-bank-booking` · `feature/bank-shift-waitlist`
+`feature/atomic-bank-booking` · `feature/multi-shift-booking` ·
+`feature/bank-shift-waitlist`
+
+> `feature/multi-shift-booking` (from [`BANK_STAFF_GAP_ANALYSIS.md`](BANK_STAFF_GAP_ANALYSIS.md)
+> §4): book one worker into several selected requests atomically (ref §3.5). Agency **cascade**
+> is **post-MVP** — the MVP records agency fills manually (`agency_filled` status); see gap
+> analysis §6 #1.
 
 ## Phase 8 — Reporting & hardening
 
@@ -105,4 +118,6 @@ builder. Extension points are documented in [`FUTURE_ROADMAP.md`](FUTURE_ROADMAP
 ## Current status
 
 - ✅ Repo initialised; `main` baseline (README, LICENSE, .gitignore, this plan).
-- 🟨 `chore/initial-project-foundation` — in progress (first vertical slice).
+- ✅ `chore/initial-project-foundation` — merged (Next.js foundation, tooling, docs).
+- ✅ `feature/application-shell` — merged (responsive shell, nav, theming).
+- 🟨 `feature/supabase-authentication` — in progress (auth flows, session, route protection).
