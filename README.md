@@ -68,6 +68,9 @@ npm run dev
 | [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) | Test pyramid & isolation suite |
 | [`docs/BRANCHING_STRATEGY.md`](docs/BRANCHING_STRATEGY.md) | Git workflow & branch naming |
 | [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) | What is / isn't ready |
+| [`docs/BANK_STAFF_DOMAIN_REFERENCE.md`](docs/BANK_STAFF_DOMAIN_REFERENCE.md) | Domain reference: bank-staff shift-filling workflows |
+| [`docs/BANK_STAFF_BACKLOG.md`](docs/BANK_STAFF_BACKLOG.md) | Bank-staff user stories & data model |
+| [`docs/BANK_STAFF_GAP_ANALYSIS.md`](docs/BANK_STAFF_GAP_ANALYSIS.md) | Bank-staff workflows vs. current scaffold |
 
 ## Licence
 
