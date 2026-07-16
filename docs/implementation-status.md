@@ -14,7 +14,97 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-16: bank-staff domain docs + quality-gate review
+## Latest — 2026-07-16: auth flow verification + CI pipeline
+
+Verified the email-dependent auth flows against the **live** backend (email confirmation ON
++ a real inbox), landed a fix required to make them work with Supabase's default email, and
+stood up CI. **Two flows remain unverified and must not be treated as done** (see below).
+
+> Git note: the auth branch and `ci/initial-quality-pipeline` were merged to `main` (PRs #4
+> and #3). `main` therefore already carries the two **unverified** flows below — merged before
+> verification completed. Low risk (they share the verified `/auth/confirm` path) but flagged.
+
+### ✅ Completed requirements (verified end-to-end against live Supabase)
+
+- **Supabase config applied:** "Confirm email" ON; Site URL `http://localhost:3000`; Redirect
+  URLs `…/auth/confirm` and `…/auth/confirm?next=/update-password`.
+- **Sign-up with confirmation ON** → "check your email", **no session** created. Proof:
+  `POST /sign-up 200` (no redirect to dashboard).
+- **Email confirmation link** → session established → `/dashboard`. Proof:
+  `GET /auth/confirm?code=… 307 → GET /dashboard 200`; user email shown in the shell.
+- **Stale/again-clicked link** correctly rejected → `/sign-in?error=verification` (no token
+  leak). Proof: `GET /auth/confirm?error=…otp_expired… 307`.
+- **Password reset request** → generic "if an account exists…" message (no user enumeration).
+  Proof: `POST /reset-password 200`.
+- **Fix — `/auth/confirm` now accepts the PKCE `?code=` links** that Supabase's *default*
+  (built-in email) templates send, via `exchangeCodeForSession`, keeping the `token_hash`
+  path as a fallback. This is what made confirmation work. Commit `68c9756`, merged in PR #4.
+- **CI pipeline (`ci/initial-quality-pipeline`)** — GitHub Actions runs the gate
+  (`format:check → lint → typecheck → test → build`) on push to `main` and every PR. Merged
+  in PR #3; the `main` badge reads **passing** (runs CI #1–#4 all green).
+- **Local gate re-run green:** `format:check`, `lint`, `typecheck`, **28/28** tests, `build`.
+
+### ❌ NOT verified — do not treat as done
+
+- **Password recovery link → `/update-password` → `updateUser`** — **blocked by Supabase's
+  built-in email rate limit** (a few emails/hour; exhausted during testing, no reset email
+  delivered). The reset *request* is verified; the recovery-specific routing
+  (`next=/update-password`) and the password update itself were **not** exercised end-to-end.
+- **Unconfirmed-email sign-in** — the generic-error path for an unconfirmed account was not
+  exercised.
+
+### ⬜ Outstanding work
+
+- Verify the two flows above — either wait for the email limit to reset and re-run, or
+  configure custom SMTP (also raises the limit).
+- **Test-coverage gap:** no automated tests cover the `/auth/confirm` route or the server
+  actions (manual live verification only). Add a mocked-client unit test for the route's
+  `code`-vs-`token_hash` branching.
+- **Cleanup:** delete throwaway test users (`martins.okuonghae+hcs1@…`, `+hcs2@…`) in
+  Supabase → Authentication → Users.
+
+### Manual configuration steps
+
+- **Done:** "Confirm email" ON; Site URL + the two `/auth/confirm` Redirect URLs.
+- **Email templates cannot be edited on the free tier without custom SMTP** — this is *why*
+  the app must handle the default PKCE `?code=` flow (above). Setting up custom SMTP (Resend)
+  is a Phase-8 item and would unlock template editing **and** higher email limits.
+- **Before deploying:** add the production origin's `/auth/confirm` URLs to Redirect URLs and
+  set the Site URL to the production origin.
+
+### Security considerations
+
+- **No user enumeration** across sign-in, sign-up, and reset — verified with generic messages.
+- **`/auth/confirm`** establishes a session from either a PKCE `code` or a `token_hash`, and on
+  failure redirects to `/sign-in?error=verification` without leaking token details — verified,
+  including rejection of an expired link.
+- **`main` carries two unverified flows** (recovery→update, unconfirmed sign-in), merged via
+  PR #4 before verification finished. Flagged; finish verification before relying on them.
+- **Email rate limiting** (built-in Supabase mailer) throttles to a few/hour — revisit with
+  custom SMTP + app-level throttling in Phase 8 hardening.
+- A **browser-extension hydration warning** (`fdprocessedid` on the theme toggle) observed
+  during testing is environmental, not an app defect — it does not reproduce in an
+  extension-free browser and no app code emits that attribute.
+
+### Exact commands to continue
+
+```bash
+# Full quality gate (matches CI)
+npm run format:check && npm run lint && npm run typecheck && npm run test
+npm run build            # requires a valid .env.local
+
+# Finish auth verification once the email limit resets:
+#   /reset-password -> emailed link -> /update-password -> set new password -> sign in
+#   (also: sign up a fresh +tag but DON'T confirm -> try sign-in -> expect generic error)
+
+# Then continue the roadmap:
+#   Phase 2 -> feature/tenant-data-model, security/tenant-rls-policies (RLS gates all
+#   tenant-owned data, including every bank-staff feature)
+```
+
+---
+
+## 2026-07-16: bank-staff domain docs + quality-gate review
 
 This entry covers a **documentation & planning** deliverable, not a runtime feature. No
 application source was added or changed in it; the only code in the working tree is the
@@ -143,21 +233,21 @@ handling, route protection.*
 - **Quality gate** — `format`, `lint`, `typecheck`, 28 unit tests, and a production
   `build` all pass.
 
-### 🟨 Implemented but NOT yet verified (do not treat as done)
+### ✅ Since verified (updated 2026-07-16 — proof in the "Latest" section)
 
-These are code-complete and compile, but have **not** been exercised against a live
-Supabase response. They need the manual steps below (email confirmation ON + a real inbox)
-to verify.
+Previously "not verified"; now exercised against the live backend:
 
-- **Email confirmation (verify)** — `signUp` sends a confirmation link; `/auth/confirm`
-  exchanges the token (`verifyOtp`). The handler and redirects compile, but no real
-  confirmation email has been clicked. Confirmation was OFF during testing.
-- **Sign-up with email confirmation ON** — the "check your email" branch (no session
-  returned). Not exercised (confirmation was OFF).
-- **Password reset request** — `resetPasswordForEmail` + generic success message. Not
-  exercised; no reset email sent/received.
-- **Password recovery + update** — `/auth/confirm?type=recovery` → `/update-password` →
-  `updateUser({ password })`. Not exercised end-to-end.
+- **Sign-up with email confirmation ON** — verified.
+- **Email confirmation link** — verified. Note: it works via the **PKCE `code`** flow of
+  Supabase's default email templates (exchanged in `/auth/confirm`), not the
+  `token_hash`/`verifyOtp` path originally assumed — see the fix in the "Latest" section.
+- **Password reset request** — verified (generic message, no user enumeration).
+
+### 🟨 Still NOT verified (do not treat as done)
+
+- **Password recovery + update** — `/auth/confirm?next=/update-password&code=…` →
+  `/update-password` → `updateUser({ password })`. **Blocked by the Supabase email rate
+  limit**; not exercised end-to-end.
 - **Unconfirmed-email sign-in** — with confirmation ON, an unconfirmed user signing in
   surfaces the generic error. Not exercised.
 
@@ -168,7 +258,8 @@ to verify.
   here only creates an auth user.
 - Custom transactional email (Resend) — `EMAIL_PROVIDER` is scaffolding; auth emails are
   sent by Supabase, not the app.
-- CI pipeline (`ci/initial-quality-pipeline`).
+- ~~CI pipeline (`ci/initial-quality-pipeline`)~~ — **done**: merged in PR #3, gating `main`
+  (see the "Latest" section).
 
 ---
 
