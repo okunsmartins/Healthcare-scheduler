@@ -10,7 +10,7 @@ import {
   signUpSchema,
   updatePasswordSchema,
 } from './schemas';
-import { safeRedirectPath, SIGN_IN_PATH } from './routes';
+import { DEFAULT_SIGNED_IN_PATH, safeRedirectPath, SIGN_IN_PATH } from './routes';
 
 /**
  * Shape returned by every auth action, consumed by the client forms via `useActionState`.
@@ -64,13 +64,22 @@ export async function signUpAction(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: { emailRedirectTo: `${appUrl()}/auth/confirm` },
   });
   if (error) {
     return { error: 'Could not create your account. Please try again.' };
+  }
+
+  // When email confirmation is disabled, Supabase returns a live session and the user is
+  // already signed in — send them straight into the app. When confirmation is enabled
+  // there is no session yet; show the check-your-email message. (For an already-registered
+  // address Supabase also returns no session, so the same message avoids revealing it.)
+  if (data.session) {
+    revalidatePath('/', 'layout');
+    redirect(DEFAULT_SIGNED_IN_PATH);
   }
 
   return {
