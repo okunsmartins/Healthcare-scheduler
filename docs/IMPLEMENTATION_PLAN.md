@@ -46,13 +46,29 @@ Suggested semantic-version milestones:
 
 | Branch | Scope | Status |
 | --- | --- | --- |
-| `feature/tenant-data-model` | `tenants`, `tenant_settings`, `profiles` tables + migrations | ⬜ |
-| `feature/tenant-memberships` | Memberships, `role_definitions`, `permission_definitions`, `role_permissions` | ⬜ |
+| `feature/tenant-data-model` | `tenants`, `tenant_settings`, `profiles` tables + migrations | 🟨 |
+| `feature/tenant-memberships` | Memberships, `role_definitions`, `permission_definitions`, `role_permissions` | 🟨 |
 | `feature/workspace-switcher` | Membership-verified tenant switcher & `/workspaces` | ⬜ |
 | `feature/department-access` | Departments, `department_memberships`, department-scoped access | ⬜ |
-| `security/tenant-rls-policies` | RLS + helper functions on all tenant-owned tables | ⬜ |
-| `test/tenant-isolation-suite` | Automated cross-tenant / cross-department isolation tests | ⬜ |
+| `security/tenant-rls-policies` | RLS + helper functions on all tenant-owned tables | 🟨 |
+| `test/tenant-isolation-suite` | Automated cross-tenant / cross-department isolation tests | 🟨 |
 | `feature/audit-foundation` | Append-only `audit_events` + write API + viewer skeleton | ⬜ |
+
+> **Delivery note — the `feature/tenant-data-model` branch spans three rows above.** A
+> meaningful isolation *proof* needs tables **and** memberships **and** helper functions
+> **and** policies together, so that branch deliberately delivers migrations `0001–0007`
+> (profiles, tenants, RBAC + seed, memberships, `app.*` helpers, RLS policies) plus a first
+> pgTAP cross-tenant isolation test (8/8 passing locally). What remains for each row:
+>
+> - `feature/tenant-memberships` — schema + seed done; **membership management UI/services** not built.
+> - `security/tenant-rls-policies` — policies cover the tables that exist today; the
+>   hardening pass must re-run over `departments`, `audit_events`, and every later
+>   tenant-owned table (nothing may ship without RLS).
+> - `test/tenant-isolation-suite` — one tenant-level test exists; **department-level** cases
+>   and wiring `supabase test db` into CI are outstanding.
+>
+> Local Supabase ports are remapped to `553xx` (the `5432x` defaults collide with a Windows
+> reserved range). See [`DATA_MODEL.md`](DATA_MODEL.md).
 
 ## Phase 3 — Organisation & workforce
 
@@ -120,4 +136,11 @@ builder. Extension points are documented in [`FUTURE_ROADMAP.md`](FUTURE_ROADMAP
 - ✅ Repo initialised; `main` baseline (README, LICENSE, .gitignore, this plan).
 - ✅ `chore/initial-project-foundation` — merged (Next.js foundation, tooling, docs).
 - ✅ `feature/application-shell` — merged (responsive shell, nav, theming).
-- 🟨 `feature/supabase-authentication` — in progress (auth flows, session, route protection).
+- ✅ `feature/supabase-authentication` — merged (PR #4). Auth flows, session, route
+  protection. **Two flows remain unverified** (password recovery → update, unconfirmed-email
+  sign-in) — blocked by the Supabase built-in email rate limit; see
+  [`implementation-status.md`](implementation-status.md).
+- ✅ `ci/initial-quality-pipeline` — merged (PR #3). GitHub Actions runs format, lint,
+  typecheck, unit tests, and build on push to `main` and every PR.
+- 🟨 **Phase 2 started** — `feature/tenant-data-model` delivers the tenancy/RBAC/RLS core with
+  a passing cross-tenant isolation test (see the Phase 2 delivery note above).
