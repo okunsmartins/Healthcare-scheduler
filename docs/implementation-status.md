@@ -15,7 +15,90 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-18: Phase 2 tenancy — data model, RLS, workspace switcher
+## Latest — 2026-07-18: department-scoped access + switcher data-path verification
+
+Adds department-scoped access (**PR #9**) and closes most of the switcher's verification gap
+by exercising its data path against the real HTTP API. The remaining gap is narrow and stated
+below.
+
+### ✅ Completed requirements (verified)
+
+- **Department-scoped access** (migrations `0008–0009`): `departments`,
+  `department_memberships`, and the `app.is_department_member()` SECURITY DEFINER helper — a
+  member with **no** department links is unrestricted (sees all departments in their tenant);
+  once scoped, they see only their linked ones — plus department/department-membership RLS
+  (writes gated on `departments.manage`). Verified: `supabase db reset` applies `0001–0009` +
+  seed; the pgTAP suite is now **14/14**, proving cross-tenant department isolation **and**
+  within-tenant scoping (a scoped user sees only their department, not an unscoped sibling nor
+  another tenant's). CI's `db-isolation` job runs this, so the department boundary is gated.
+- **Switcher data path over HTTP — now verified.** Queried the local REST API **as the demo
+  user** (minted JWT): `getMyMemberships`'s embedded-select returns the exact object shape the
+  code maps, with the correct two workspaces + roles (`st-marys:owner`, `riverside-clinic:
+  viewer`); the cross-tenant control (a tenant the user isn't in) returned `[]`. So **RLS holds
+  over the real API**, not just in in-DB simulation. This retires the main runtime risk flagged
+  in the previous entry.
+
+### ❌ NOT verified — do not treat as done
+
+- **Switcher browser click-through** — a dev server pointed at the local stack is up
+  (`:3005`), but the authenticated UI walk (log in → `/workspaces` lists both → pick one →
+  `/[slug]/dashboard` → bogus slug 404s) has **not** been completed through a real login. The
+  data path underneath it is now proven (above); the React rendering/routing has not been
+  exercised in a browser.
+- **Department management UI** — out of scope for `feature/department-access` (arrives with
+  Phase 3 `feature/department-management`).
+- **Two Phase 1 auth flows** — password recovery → update, and unconfirmed-email sign-in —
+  still blocked by the Supabase email rate limit.
+
+### ⬜ Outstanding work
+
+- Complete the switcher **browser click-through** (needs a human login as `demo@local.test`).
+- Remaining Phase 2: `feature/audit-foundation` (append-only `audit_events`), then a final RLS
+  **hardening pass** over `audit_events` and any later tenant-owned table.
+- **Test-coverage gaps** unchanged: no unit tests for `src/lib/tenancy` or the server actions.
+
+### Manual configuration steps
+
+- **Local E2E** (to run the app against the local stack): bring up a fuller local stack but
+  **exclude `storage-api`** — its container health check is flaky on Windows and otherwise
+  rolls the whole stack back. Run the dev server with a **local env override** (does not touch
+  `.env.local`): `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321` plus the local anon/service
+  keys from `supabase status -o env`. Demo login: `demo@local.test` / `DemoPass123!`.
+- Prior Docker / Supabase-CLI steps and the Windows `553xx` port remap still apply.
+
+### Security considerations
+
+- **Department scoping is RLS-enforced** (`is_department_member`, unrestricted only when a
+  member has no department links) and proven by the 14-assertion test that gates CI.
+- **RLS verified over the real HTTP API** — the cross-tenant control returned `[]` through
+  PostgREST, confirming isolation isn't only an in-database property.
+- **Local dev keys / JWT secret are the well-known shared defaults** (`supabase-demo` issuer) —
+  local only, never a hosted/production project.
+- The **switcher UI remains unproven in a browser** (above) — treat the running UI as
+  unverified until the click-through is done.
+
+### Exact commands to continue
+
+```bash
+# App gate (matches CI Quality gate)
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (Docker running)
+supabase start -x storage-api            # storage health check is flaky on Windows
+supabase db reset                        # migrations 0001-0009 + seed
+supabase test db                         # pgTAP isolation suite (expect 14/14)
+
+# Switcher browser E2E (human logs in):
+#   run dev server with local env, open http://localhost:3005,
+#   sign in demo@local.test / DemoPass123!, walk /workspaces -> /[slug]/dashboard -> 404 on a bad slug
+
+# Next roadmap branch:
+#   feature/audit-foundation  (append-only audit_events + app.log_audit + src/lib/audit)
+```
+
+---
+
+## 2026-07-18: Phase 2 tenancy — data model, RLS, workspace switcher
 
 The multi-tenant security core and the first tenant-aware UI. Merged to `main` in **PR #6**
 (tenant data model + RLS + isolation test) and **PR #7** (workspace switcher + path-based
@@ -50,11 +133,9 @@ asserted.
 
 ### ❌ NOT verified — do not treat as done
 
-- **Workspace switcher browser flow** — the PostgREST **HTTP embedded-select** in
-  `getMyMemberships` and the **click-through** (log in → `/workspaces` lists both tenants →
-  pick one → land on `/[slug]/dashboard` → non-member slug 404s) have **not** been exercised
-  in a browser. Proven at the SQL/RLS layer only. Merged on that basis (low risk — a standard
-  supabase-js pattern — but not zero).
+- **Workspace switcher browser flow** — _superseded by the entry above._ The HTTP
+  embedded-select was since verified over the real API; only the **browser click-through**
+  remains unverified.
 - **Two auth flows** still unverified from Phase 1 (password recovery → update, unconfirmed
   sign-in) — blocked by the Supabase email rate limit.
 
