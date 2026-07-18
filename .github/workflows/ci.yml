@@ -57,3 +57,33 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
           EMAIL_PROVIDER: console
           CRON_SECRET: ci-placeholder-cron-secret-0123456789
+
+  # Applies the migrations to a real (local) Supabase Postgres and runs the pgTAP
+  # cross-tenant isolation test. This is what keeps an RLS regression from merging.
+  db-isolation:
+    name: RLS isolation test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Start only the database container (every other service excluded). Migrations
+      # in supabase/migrations are applied on start. Linux runners have no issue with
+      # the 553xx ports the config uses.
+      - name: Start local database
+        run: >
+          supabase start
+          -x studio,realtime,storage,imgproxy,kong,rest,meta,edge-runtime,functions,analytics,vector,inbucket
+          --ignore-health-check
+
+      - name: Run RLS isolation test (pgTAP)
+        run: supabase test db
+
+      - name: Stop local stack
+        if: always()
+        run: supabase stop --no-backup
