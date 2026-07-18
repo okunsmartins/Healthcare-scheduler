@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils/cn';
-import { isNavItemActive, NAV_ITEMS } from './nav-items';
+import { isNavItemActive, navHref, NAV_ITEMS } from './nav-items';
 
 /**
  * Fixed bottom navigation for mobile (< md). Each destination is a full-height column so
  * the tap target comfortably exceeds 44px. Hidden on desktop, where the sidebar takes over.
+ * Navigation is scoped to the active `tenantSlug`.
  */
-export function MobileNav() {
+export function MobileNav({ tenantSlug }: { tenantSlug: string }) {
   const pathname = usePathname();
 
   return (
@@ -19,12 +20,12 @@ export function MobileNav() {
     >
       <ul className="grid grid-cols-4">
         {NAV_ITEMS.map((item) => {
-          const active = isNavItemActive(pathname, item.href);
+          const active = isNavItemActive(pathname, tenantSlug, item.segment);
           const Icon = item.icon;
           return (
-            <li key={item.href}>
+            <li key={item.segment}>
               <Link
-                href={item.href}
+                href={navHref(tenantSlug, item.segment)}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex min-h-16 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-medium transition-colors',

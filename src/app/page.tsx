@@ -47,7 +47,7 @@ export default async function HomePage() {
 
       <div className="mt-8 flex flex-wrap gap-3">
         {user ? (
-          <Link href="/dashboard" className={buttonVariants({ size: 'lg' })}>
+          <Link href="/workspaces" className={buttonVariants({ size: 'lg' })}>
             Go to your workspace
           </Link>
         ) : (

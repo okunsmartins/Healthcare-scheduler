@@ -1,12 +1,12 @@
-import { AppShell } from '@/components/shell/app-shell';
 import { requireUser } from '@/lib/auth/user';
 
 /**
- * Layout for the authenticated workspace. Middleware already redirects unauthenticated
- * requests to sign-in; `requireUser()` re-checks here as defence-in-depth and provides the
- * user for the shell.
+ * Guard for every authenticated area (`/workspaces` and `/[tenantSlug]/*`). Middleware
+ * already redirects unauthenticated requests; `requireUser()` re-checks here as
+ * defence-in-depth. The workspace chrome (sidebar/nav) is added by the `[tenantSlug]`
+ * layout, since it needs a resolved tenant — `/workspaces` itself renders chrome-free.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
-  return <AppShell userEmail={user.email ?? ''}>{children}</AppShell>;
+  await requireUser();
+  return children;
 }
