@@ -48,8 +48,8 @@ Suggested semantic-version milestones:
 | --- | --- | --- |
 | `feature/tenant-data-model` | `tenants`, `tenant_settings`, `profiles` tables + migrations | 🟨 |
 | `feature/tenant-memberships` | Memberships, `role_definitions`, `permission_definitions`, `role_permissions` | 🟨 |
-| `feature/workspace-switcher` | Membership-verified tenant switcher & `/workspaces` | ⬜ |
-| `feature/department-access` | Departments, `department_memberships`, department-scoped access | ⬜ |
+| `feature/workspace-switcher` | Membership-verified tenant switcher & `/workspaces` | ✅ |
+| `feature/department-access` | Departments, `department_memberships`, department-scoped access | 🟨 |
 | `security/tenant-rls-policies` | RLS + helper functions on all tenant-owned tables | 🟨 |
 | `test/tenant-isolation-suite` | Automated cross-tenant / cross-department isolation tests | 🟨 |
 | `feature/audit-foundation` | Append-only `audit_events` + write API + viewer skeleton | ⬜ |
@@ -61,11 +61,16 @@ Suggested semantic-version milestones:
 > pgTAP cross-tenant isolation test (8/8 passing locally). What remains for each row:
 >
 > - `feature/tenant-memberships` — schema + seed done; **membership management UI/services** not built.
-> - `security/tenant-rls-policies` — policies cover the tables that exist today; the
->   hardening pass must re-run over `departments`, `audit_events`, and every later
+> - `feature/department-access` (🟨) — migrations `0008–0009` deliver `departments`,
+>   `department_memberships`, the `app.is_department_member` helper (unrestricted when a member
+>   has no department links), and department-scoped RLS. **Department management UI is not
+>   built** (arrives with Phase 3 `feature/department-management`).
+> - `security/tenant-rls-policies` — policies now cover tenants, memberships, **and
+>   departments**; the hardening pass must still re-run over `audit_events` and every later
 >   tenant-owned table (nothing may ship without RLS).
-> - `test/tenant-isolation-suite` — one tenant-level test exists; **department-level** cases
->   and wiring `supabase test db` into CI are outstanding.
+> - `test/tenant-isolation-suite` — the pgTAP suite now covers **cross-tenant and
+>   department-scoping** cases (14/14) and **runs in CI** on every PR. Cross-department cases
+>   for future tables are added as those tables land.
 >
 > Local Supabase ports are remapped to `553xx` (the `5432x` defaults collide with a Windows
 > reserved range). See [`DATA_MODEL.md`](DATA_MODEL.md).
