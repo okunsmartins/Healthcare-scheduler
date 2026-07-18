@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SIGNED_IN_PATH,
-  matchesAnyPrefix,
+  isPublicPath,
   matchesPrefix,
-  PROTECTED_PREFIXES,
+  requiresAuth,
   safeRedirectPath,
+  SIGNED_OUT_ONLY_PREFIXES,
+  matchesAnyPrefix,
 } from './routes';
 
 describe('matchesPrefix', () => {
@@ -15,18 +17,37 @@ describe('matchesPrefix', () => {
   });
 });
 
-describe('matchesAnyPrefix', () => {
-  it('is true for any protected section', () => {
-    expect(matchesAnyPrefix('/dashboard', PROTECTED_PREFIXES)).toBe(true);
-    expect(matchesAnyPrefix('/settings/team', PROTECTED_PREFIXES)).toBe(true);
-    expect(matchesAnyPrefix('/sign-in', PROTECTED_PREFIXES)).toBe(false);
+describe('isPublicPath / requiresAuth', () => {
+  it('treats the landing page and auth/api routes as public', () => {
+    expect(isPublicPath('/')).toBe(true);
+    expect(isPublicPath('/sign-in')).toBe(true);
+    expect(isPublicPath('/auth/confirm')).toBe(true);
+    expect(isPublicPath('/api/health')).toBe(true);
+  });
+
+  it('requires auth for workspaces and every tenant-scoped route', () => {
+    expect(requiresAuth('/workspaces')).toBe(true);
+    expect(requiresAuth('/st-marys/dashboard')).toBe(true);
+    expect(requiresAuth('/st-marys/roster/2026-07')).toBe(true);
+  });
+
+  it('does not treat the landing page as auth-required', () => {
+    expect(requiresAuth('/')).toBe(false);
+  });
+});
+
+describe('matchesAnyPrefix (signed-out-only routes)', () => {
+  it('bounces signed-in users off sign-in/up/reset', () => {
+    expect(matchesAnyPrefix('/sign-in', SIGNED_OUT_ONLY_PREFIXES)).toBe(true);
+    expect(matchesAnyPrefix('/reset-password', SIGNED_OUT_ONLY_PREFIXES)).toBe(true);
+    expect(matchesAnyPrefix('/workspaces', SIGNED_OUT_ONLY_PREFIXES)).toBe(false);
   });
 });
 
 describe('safeRedirectPath', () => {
   it('allows in-app absolute paths', () => {
-    expect(safeRedirectPath('/roster')).toBe('/roster');
-    expect(safeRedirectPath('/settings/team')).toBe('/settings/team');
+    expect(safeRedirectPath('/st-marys/roster')).toBe('/st-marys/roster');
+    expect(safeRedirectPath('/workspaces')).toBe('/workspaces');
   });
 
   it('falls back for empty, external, or protocol-relative targets', () => {
@@ -38,6 +59,6 @@ describe('safeRedirectPath', () => {
   });
 
   it('honours a custom fallback', () => {
-    expect(safeRedirectPath(null, '/roster')).toBe('/roster');
+    expect(safeRedirectPath(null, '/st-marys/roster')).toBe('/st-marys/roster');
   });
 });

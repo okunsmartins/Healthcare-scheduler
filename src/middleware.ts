@@ -3,9 +3,9 @@ import { updateSession } from '@/lib/supabase/middleware';
 import {
   DEFAULT_SIGNED_IN_PATH,
   SIGN_IN_PATH,
-  PROTECTED_PREFIXES,
   SIGNED_OUT_ONLY_PREFIXES,
   matchesAnyPrefix,
+  requiresAuth,
 } from '@/lib/auth/routes';
 
 /**
@@ -21,7 +21,7 @@ export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  if (!user && matchesAnyPrefix(pathname, PROTECTED_PREFIXES)) {
+  if (!user && requiresAuth(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = SIGN_IN_PATH;
     url.search = '';
