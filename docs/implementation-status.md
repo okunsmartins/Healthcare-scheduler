@@ -3,9 +3,10 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current branch:** `feature/supabase-authentication`
-- **Base:** `main` (foundation ✅ + application shell ✅ merged)
-- **Verification backend:** a hosted Supabase project (EU / West Ireland)
+- **Current focus:** Phase 2 (multi-tenancy & security) — on `main` via PRs #6, #7.
+- **Base:** `main` (Phase 1 ✅ merged: foundation, shell, auth, CI).
+- **Verification backends:** a hosted Supabase project (auth flows) + a **local** Supabase
+  stack via the CLI (migrations, RLS, tenancy — Docker required).
 
 **How to read this:** a requirement is only listed under **Completed** if it was
 **exercised end-to-end against the live backend**. Anything implemented but not yet run
@@ -14,7 +15,108 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-16: auth flow verification + CI pipeline
+## Latest — 2026-07-18: Phase 2 tenancy — data model, RLS, workspace switcher
+
+The multi-tenant security core and the first tenant-aware UI. Merged to `main` in **PR #6**
+(tenant data model + RLS + isolation test) and **PR #7** (workspace switcher + path-based
+routing). CI runs an isolation test on every PR, so tenant isolation is enforced, not just
+asserted.
+
+> Verification note: DB/RLS work is verified against a **local** Supabase stack (Docker). The
+> switcher's **browser** flow is **not** yet verified end-to-end — see "NOT verified" below.
+
+### ✅ Completed requirements (verified)
+
+- **Tenancy schema** (migrations `0001–0007`): `profiles` (+ auto-create trigger), `tenants`,
+  `tenant_settings`, RBAC catalog (`permission_definitions`, `role_definitions`,
+  `role_permissions`) with a system role seed (owner→viewer), `memberships`, and RLS policies.
+- **RLS with no recursion**: `SECURITY DEFINER` helpers in a private `app` schema
+  (`is_member`, `has_permission`, `shares_tenant`); RLS enabled deny-by-default at table
+  creation, member policies added alongside the helpers. Verified: `supabase test db` runs a
+  pgTAP **cross-tenant isolation test, 8/8** — each user sees exactly their own tenant's rows
+  and zero of the other's (both directions), and still passes with seed data present.
+- **CI enforces isolation**: a `db-isolation` job applies the migrations to a real Postgres and
+  runs the isolation test on every push/PR. Green on `main`.
+- **Tenant-context resolution** (`src/lib/tenancy`): `getMyMemberships()` /
+  `resolveTenantContext(slug)` via the RLS-aware server client. The route slug is only a
+  *candidate* until membership is verified — matches `ARCHITECTURE.md`. Verified at the
+  SQL/RLS level: querying as the seeded demo user resolves exactly `st-marys:owner` +
+  `riverside-clinic:viewer`.
+- **Path-based routing + membership guard**: app routes live under `/[tenantSlug]/*`; the
+  tenant layout resolves the tenant and **404s non-members** (no info leak). `/workspaces`
+  lists memberships (auto-forwards on a single one). Middleware flips to a public-allowlist
+  model (`requiresAuth`) since slugs are dynamic. Verified: format, lint, typecheck, **31
+  tests**, build all green; route tree confirmed by the build output.
+
+### ❌ NOT verified — do not treat as done
+
+- **Workspace switcher browser flow** — the PostgREST **HTTP embedded-select** in
+  `getMyMemberships` and the **click-through** (log in → `/workspaces` lists both tenants →
+  pick one → land on `/[slug]/dashboard` → non-member slug 404s) have **not** been exercised
+  in a browser. Proven at the SQL/RLS layer only. Merged on that basis (low risk — a standard
+  supabase-js pattern — but not zero).
+- **Two auth flows** still unverified from Phase 1 (password recovery → update, unconfirmed
+  sign-in) — blocked by the Supabase email rate limit.
+
+### ⬜ Outstanding work
+
+- **Collaborative browser E2E** of the switcher (needs the app pointed at the local stack + a
+  login, which must be done by a human).
+- Remaining Phase 2: `feature/department-access` (departments + department-scoped RLS), an RLS
+  **hardening pass** over the new tables, `feature/audit-foundation`, and **department-level**
+  isolation cases in the test suite.
+- **Test-coverage gaps**: no unit tests for `src/lib/tenancy` or the server actions (would need
+  a mocked Supabase client); covered by the isolation test + manual checks only.
+- Minor: CI shows one **informational** annotation — GitHub deprecating the Node 20 *runtime*
+  for actions. Not fixable via our `node-version` input; revisit when action majors update.
+
+### Manual configuration steps
+
+- **Local development now requires Docker + the Supabase CLI**: `supabase start` boots the
+  local stack; `supabase db reset` applies migrations + `supabase/seed.sql`; `supabase test db`
+  runs the pgTAP isolation test.
+- **Windows only**: the Supabase default local ports (`5432x`) fall in a reserved range and
+  cannot bind — `config.toml` remaps them to `553xx`.
+- **Local demo login** (seed): `demo@local.test` / `DemoPass123!` (owner of St Mary's, viewer
+  of Riverside). Local stack only — never applied to a hosted project.
+- No hosted-project changes were needed for this phase.
+
+### Security considerations
+
+- **Isolation enforced at the database**, not just the app — RLS on every tenant-owned table,
+  proven by an automated test that now gates merges. This is the core security property of the
+  product and it is exercised in CI.
+- **No client-trusted tenant id**: the `[tenantSlug]` slug is verified against the user's
+  memberships server-side before any data is returned; a non-member gets a 404.
+- **`SECURITY DEFINER` helpers** live in a private `app` schema (not exposed via PostgREST);
+  the service-role key is server-only and unused in this feature path.
+- **`/api` is currently in the public allowlist** (only `/api/health` exists). Any future API
+  route that needs auth must be handled explicitly — flagged so it isn't overlooked.
+- The **switcher browser flow is unverified** (above); treat the running UI as unproven until
+  the E2E pass is done.
+
+### Exact commands to continue
+
+```bash
+# App quality gate (matches CI's Quality gate job)
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# Database / RLS (Docker must be running)
+supabase start                 # boot local stack (Windows: ports are remapped to 553xx)
+supabase db reset              # apply migrations 0001-0007 + seed.sql
+supabase test db               # run the pgTAP cross-tenant isolation test (expect 8/8)
+
+# Collaborative browser E2E of the switcher (human logs in):
+#   run the dev server pointed at the LOCAL stack, sign in as demo@local.test / DemoPass123!,
+#   confirm /workspaces -> pick a tenant -> /[slug]/dashboard, and that a non-member slug 404s.
+
+# Next roadmap branch:
+#   feature/department-access  (departments + department_memberships + department-scoped RLS)
+```
+
+---
+
+## 2026-07-16: auth flow verification + CI pipeline
 
 Verified the email-dependent auth flows against the **live** backend (email confirmation ON
 + a real inbox), landed a fix required to make them work with Supabase's default email, and
