@@ -39,3 +39,11 @@ insert into public.memberships (tenant_id, profile_id, role_id)
 select 'a0000000-0000-0000-0000-0000000000a2', 'd0000000-0000-0000-0000-000000000001', id
 from public.role_definitions where key = 'viewer' and tenant_id is null
 on conflict (tenant_id, profile_id) do nothing;
+
+-- Departments for the demo workspaces. The demo user is an owner (unrestricted), so no
+-- department_memberships are seeded — they see all departments in each workspace.
+insert into public.departments (tenant_id, name, code) values
+  ('a0000000-0000-0000-0000-0000000000a1', 'Emergency', 'ED'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Maternity', 'MAT'),
+  ('a0000000-0000-0000-0000-0000000000a2', 'General Practice', 'GP')
+on conflict (tenant_id, code) do nothing;
