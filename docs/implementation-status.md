@@ -15,7 +15,66 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-19: switcher browser E2E verified + seed auth fix
+## Latest — 2026-07-19: audit foundation (append-only audit_events)
+
+Phase 2's last feature branch. Adds the append-only audit trail (migration `0010`). Schema +
+RLS + tests only — the app-layer write API and viewer UI are deliberately deferred.
+
+### ✅ Completed requirements (verified)
+
+- **`audit_events` table** (migration `0010`): `tenant_id`, `actor_id`, `action`,
+  `entity_type`, `entity_id`, `metadata`, `created_at`; RLS enabled.
+- **Append-only enforced (verified).** `SELECT` granted to `authenticated`;
+  `INSERT/UPDATE/DELETE` **revoked** from `authenticated` + `anon`, with **no** write policies —
+  so the trail cannot be altered through the API. Writes go through the `app.log_audit()`
+  SECURITY DEFINER writer or the service role.
+- **Read gated by permission.** New `audit.view` permission (granted to owner + admin); the
+  SELECT policy uses `app.has_permission(tenant_id, 'audit.view')`.
+- **Isolation suite extended 14 → 22 (verified locally).** `supabase db reset` applies
+  `0001–0010` + seed; `supabase test db` → **22/22**. New cases: each user reads only their own
+  tenant's audit events (zero of the other's), and the trail is append-only (`authenticated` has
+  SELECT but not INSERT/UPDATE/DELETE, checked via `has_table_privilege`). CI's `db-isolation`
+  job runs the suite, so the audit boundary is gated on every PR. App gate green (31 tests).
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **Audit write API (`src/lib/audit`) and viewer UI** — deliberately deferred until there are
+  mutating features to audit (Phase 3+). **Nothing writes audit events yet**, so building them
+  now would be speculative. The DB writer (`app.log_audit`) exists; the app just doesn't call it.
+- **Two Phase 1 auth flows** (recovery → update, unconfirmed sign-in) — still email-rate-limited.
+
+### Manual configuration steps
+
+- None new. DB verification uses the existing local-Supabase flow (`supabase db reset` +
+  `supabase test db`; `supabase start -x storage-api` on Windows).
+
+### Security considerations
+
+- **Tamper-resistant audit** — append-only is enforced by *revoked table privileges* plus the
+  absence of write policies, not merely by convention; proven in CI via `has_table_privilege`.
+- **`app.log_audit` is granted to `authenticated`** but lives in the private `app` schema, which
+  PostgREST does **not** expose — so it cannot be called from the API to forge events. Keep it
+  out of `public`; the future write path should use the service role (server-only), not an
+  API-callable RPC.
+- **Audit reads are permission-gated** (`audit.view`), so a plain member cannot browse the log.
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS + audit (Docker running)
+supabase db reset            # migrations 0001-0010 + seed
+supabase test db             # pgTAP isolation + department + audit suite (expect 22/22)
+
+# Next: close Phase 2 with a final RLS hardening pass, then Phase 3
+#   (feature/employee-directory is the first Phase 3 branch).
+```
+
+---
+
+## 2026-07-19: switcher browser E2E verified + seed auth fix
 
 The workspace switcher was walked **end-to-end in a real browser**, which caught and fixed a
 real seed bug. Local E2E ran the app against the local Supabase stack via a gitignored
