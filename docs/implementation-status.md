@@ -15,7 +15,37 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-18: department-scoped access + switcher data-path verification
+## Latest — 2026-07-19: switcher browser E2E verified + seed auth fix
+
+The workspace switcher was walked **end-to-end in a real browser**, which caught and fixed a
+real seed bug. Local E2E ran the app against the local Supabase stack via a gitignored
+`.env.development.local` (so `.env.local` is untouched — delete that file when finished).
+
+### ✅ Completed requirements (verified)
+
+- **Switcher browser flow — verified end-to-end.** Signed in as the seeded demo user →
+  redirected to `/workspaces`, which listed both workspaces with the correct roles (St Mary's
+  Hospital · Owner, Riverside Clinic · Viewer) → clicked through to `/st-marys/dashboard` with
+  the tenant chrome, styled. Corroborated in the gateway/server logs: `POST /auth/v1/token 200`,
+  `GET /rest/v1/memberships…!inner… 200`, `GET /workspaces 200`, `GET /st-marys/dashboard 200`.
+  (The non-member-slug 404 remains covered by the isolation test + the `notFound()` guard in
+  `[tenantSlug]/layout.tsx`; not separately clicked.)
+- **Seed auth bug fixed** (`supabase/seed.sql`): the demo user was inserted with `NULL` auth
+  token columns (`confirmation_token`, `recovery_token`, …), which crashed GoTrue's password
+  grant with a 500 (*"converting NULL to string is unsupported"*) — meaning **login worked
+  nowhere**. Fixed by inserting those columns as `''`. Only a real browser login exercised this
+  path; the pgTAP suite (which uses JWT claims, not a password grant) never would have caught it.
+
+### ⬜ Outstanding / notes
+
+- **Two Phase 1 auth flows** still unverified (recovery → update, unconfirmed sign-in) — blocked
+  by the Supabase email rate limit.
+- Local browser E2E needs the fuller stack (`supabase start -x storage-api` on Windows — the
+  storage health check is flaky) plus the dev server pointed at local via `.env.development.local`.
+
+---
+
+## 2026-07-18: department-scoped access + switcher data-path verification
 
 Adds department-scoped access (**PR #9**) and closes most of the switcher's verification gap
 by exercising its data path against the real HTTP API. The remaining gap is narrow and stated
@@ -40,11 +70,8 @@ below.
 
 ### ❌ NOT verified — do not treat as done
 
-- **Switcher browser click-through** — a dev server pointed at the local stack is up
-  (`:3005`), but the authenticated UI walk (log in → `/workspaces` lists both → pick one →
-  `/[slug]/dashboard` → bogus slug 404s) has **not** been completed through a real login. The
-  data path underneath it is now proven (above); the React rendering/routing has not been
-  exercised in a browser.
+- **Switcher browser click-through** — _superseded: verified end-to-end on 2026-07-19 (see the
+  entry above), which also caught and fixed a real seed auth bug._
 - **Department management UI** — out of scope for `feature/department-access` (arrives with
   Phase 3 `feature/department-management`).
 - **Two Phase 1 auth flows** — password recovery → update, and unconfirmed-email sign-in —
@@ -52,7 +79,7 @@ below.
 
 ### ⬜ Outstanding work
 
-- Complete the switcher **browser click-through** (needs a human login as `demo@local.test`).
+- ~~Complete the switcher **browser click-through**~~ — done 2026-07-19 (see the latest entry).
 - Remaining Phase 2: `feature/audit-foundation` (append-only `audit_events`), then a final RLS
   **hardening pass** over `audit_events` and any later tenant-owned table.
 - **Test-coverage gaps** unchanged: no unit tests for `src/lib/tenancy` or the server actions.
