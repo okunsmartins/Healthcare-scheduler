@@ -52,7 +52,7 @@ Suggested semantic-version milestones:
 | `feature/department-access` | Departments, `department_memberships`, department-scoped access | 🟨 |
 | `security/tenant-rls-policies` | RLS + helper functions on all tenant-owned tables | 🟨 |
 | `test/tenant-isolation-suite` | Automated cross-tenant / cross-department isolation tests | 🟨 |
-| `feature/audit-foundation` | Append-only `audit_events` + write API + viewer skeleton | ⬜ |
+| `feature/audit-foundation` | Append-only `audit_events` + write API + viewer skeleton | 🟨 |
 
 > **Delivery note — the `feature/tenant-data-model` branch spans three rows above.** A
 > meaningful isolation *proof* needs tables **and** memberships **and** helper functions
@@ -65,12 +65,15 @@ Suggested semantic-version milestones:
 >   `department_memberships`, the `app.is_department_member` helper (unrestricted when a member
 >   has no department links), and department-scoped RLS. **Department management UI is not
 >   built** (arrives with Phase 3 `feature/department-management`).
-> - `security/tenant-rls-policies` — policies now cover tenants, memberships, **and
->   departments**; the hardening pass must still re-run over `audit_events` and every later
->   tenant-owned table (nothing may ship without RLS).
-> - `test/tenant-isolation-suite` — the pgTAP suite now covers **cross-tenant and
->   department-scoping** cases (14/14) and **runs in CI** on every PR. Cross-department cases
->   for future tables are added as those tables land.
+> - `feature/audit-foundation` (🟨) — migration `0010` delivers append-only `audit_events`
+>   (insert/update/delete revoked from API roles; readable with the new `audit.view`
+>   permission), the `app.log_audit()` SECURITY DEFINER writer, and isolation-test coverage.
+>   The **app-layer write API (`src/lib/audit`) and viewer UI are deferred** — they only become
+>   meaningful once there are mutating features to audit (Phase 3+); nothing writes audit yet.
+> - `security/tenant-rls-policies` — policies now cover tenants, memberships, departments, **and
+>   audit_events**; the hardening pass re-runs over every later tenant-owned table as it lands.
+> - `test/tenant-isolation-suite` — the pgTAP suite now covers **cross-tenant, department-
+>   scoping, and audit** cases (**22/22**) and **runs in CI** on every PR.
 >
 > Local Supabase ports are remapped to `553xx` (the `5432x` defaults collide with a Windows
 > reserved range). See [`DATA_MODEL.md`](DATA_MODEL.md).
