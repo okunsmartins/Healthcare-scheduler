@@ -1,9 +1,10 @@
--- Cross-tenant + department isolation test (pgTAP). Run with: supabase test db
--- Proves that under RLS an authenticated user sees ONLY their own tenant's rows, and only
--- the departments they are scoped to (unrestricted when they have no department links).
+-- Cross-tenant + department + audit isolation test (pgTAP). Run with: supabase test db
+-- Proves that under RLS an authenticated user sees ONLY their own tenant's rows, only the
+-- departments they are scoped to (unrestricted when they have no department links), and only
+-- their own tenant's audit events — and that the audit trail is append-only.
 
 begin;
-select plan(14);
+select plan(22);
 
 -- Two auth users (the trigger creates their profiles), two tenants, one membership each.
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -42,6 +43,12 @@ from public.memberships m
 where m.tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
   and m.profile_id = '11111111-1111-1111-1111-111111111111';
 
+-- Audit events: two in Tenant A, one in Tenant B.
+insert into public.audit_events (tenant_id, actor_id, action, entity_type) values
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'membership.created', 'membership'),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'tenant.updated', 'tenant'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'membership.created', 'membership');
+
 -- ===== As User A (scoped to Emergency) =====
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111"}', true);
@@ -57,6 +64,9 @@ select count(*)::int as a_dept_wa     from public.departments
   where id = 'aa222222-2222-2222-2222-222222222222' \gset
 select count(*)::int as a_dept_b      from public.departments
   where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
+select count(*)::int as a_audit       from public.audit_events \gset
+select count(*)::int as a_audit_b     from public.audit_events
+  where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
 reset role;
 
 select is(:a_tenants,     1, 'User A sees exactly one tenant');
@@ -67,6 +77,8 @@ select is(:a_departments, 1, 'User A (scoped to Emergency) sees exactly one depa
 select is(:a_dept_ed,     1, 'User A sees their scoped department (Emergency)');
 select is(:a_dept_wa,     0, 'User A does not see an unscoped department (Ward A)');
 select is(:a_dept_b,      0, 'User A cannot see Tenant B departments');
+select is(:a_audit,       2, 'User A (audit.view) sees their tenant''s audit events');
+select is(:a_audit_b,     0, 'User A cannot see Tenant B audit events');
 
 -- ===== As User B (unrestricted) =====
 set local role authenticated;
@@ -79,6 +91,9 @@ select count(*)::int as b_settings_a  from public.tenant_settings
 select count(*)::int as b_departments from public.departments \gset
 select count(*)::int as b_dept_a      from public.departments
   where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
+select count(*)::int as b_audit       from public.audit_events \gset
+select count(*)::int as b_audit_a     from public.audit_events
+  where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
 reset role;
 
 select is(:b_tenants,     1, 'User B sees exactly one tenant');
@@ -87,6 +102,18 @@ select is(:b_members,     1, 'User B sees only their own membership');
 select is(:b_settings_a,  0, 'User B cannot see Tenant A settings');
 select is(:b_departments, 1, 'User B (unrestricted) sees their tenant department');
 select is(:b_dept_a,      0, 'User B cannot see Tenant A departments');
+select is(:b_audit,       1, 'User B sees their tenant''s audit event');
+select is(:b_audit_a,     0, 'User B cannot see Tenant A audit events');
+
+-- The audit trail is append-only for API roles (writes go via app.log_audit / service role).
+select ok(has_table_privilege('authenticated', 'public.audit_events', 'SELECT'),
+  'authenticated may read the audit log');
+select ok(not has_table_privilege('authenticated', 'public.audit_events', 'INSERT'),
+  'authenticated may not insert audit events directly');
+select ok(not has_table_privilege('authenticated', 'public.audit_events', 'UPDATE'),
+  'audit events cannot be updated (append-only)');
+select ok(not has_table_privilege('authenticated', 'public.audit_events', 'DELETE'),
+  'audit events cannot be deleted (append-only)');
 
 select * from finish();
 rollback;
