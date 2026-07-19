@@ -4,9 +4,14 @@
 --
 -- Demo login:  demo@local.test  /  DemoPass123!
 
+-- NOTE: the token columns MUST be '' (not NULL). GoTrue's password-grant query scans them
+-- as non-null strings, so a NULL there makes login fail with a 500 ("converting NULL to
+-- string is unsupported") — even though the row looks fine to the rest of the app.
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
-  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  email_change_token_current, phone_change, phone_change_token, reauthentication_token
 )
 values (
   'd0000000-0000-0000-0000-000000000001',
@@ -15,7 +20,8 @@ values (
   crypt('DemoPass123!', gen_salt('bf')),
   now(), now(), now(),
   '{"provider":"email","providers":["email"]}',
-  '{"full_name":"Demo User"}'
+  '{"full_name":"Demo User"}',
+  '', '', '', '', '', '', '', ''
 )
 on conflict (id) do nothing;
 
