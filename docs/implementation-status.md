@@ -3,10 +3,11 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 2 (multi-tenancy & security) — on `main` via PRs #6, #7.
-- **Base:** `main` (Phase 1 ✅ merged: foundation, shell, auth, CI).
-- **Verification backends:** a hosted Supabase project (auth flows) + a **local** Supabase
-  stack via the CLI (migrations, RLS, tenancy — Docker required).
+- **Current focus:** Phase 3 (organisation & workforce) — started with `feature/tenant-onboarding`.
+- **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
+  switcher, departments, audit).
+- **Verification backends:** a **local** Supabase stack via the CLI (migrations, RLS, tenancy —
+  Docker required) + the **hosted** project, now carrying the full schema (migrations `0001–0011`).
 
 **How to read this:** a requirement is only listed under **Completed** if it was
 **exercised end-to-end against the live backend**. Anything implemented but not yet run
@@ -15,7 +16,78 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-19: audit foundation (append-only audit_events)
+## Latest — 2026-07-20: self-serve workspace creation (Phase 3) + hosted schema deployed
+
+Phase 3 opener (**PR #13**, merged): a signed-in user can now create their own workspace. Also
+deployed the full schema to the **hosted** Supabase project for the first time.
+
+### ✅ Completed requirements (verified)
+
+- **Self-serve workspace creation.** `create_tenant(p_name)` SECURITY DEFINER function
+  (migration `0011`) slugifies the name (unique-suffixing on collision) and creates the tenant,
+  its settings, and an **owner** membership atomically; `tenants` still has no INSERT policy, so
+  this is the only creation path. `/workspaces/new` page + form + `createWorkspaceAction`, plus
+  "Create workspace" entry points on `/workspaces`.
+- **Verified end-to-end (DB + HTTP + browser):**
+  - **DB:** `supabase test db` → **26/26** (4 new `create_tenant` assertions: workspace visible
+    to creator, exactly one membership, settings created, creator is owner).
+  - **HTTP:** `POST /rest/v1/rpc/create_tenant` as the demo user returns the tenant row with a
+    `slug` (confirming the server action's shape assumption) and creates an owner membership.
+  - **Browser:** signed in → `/workspaces/new` → named a workspace → the app's `create_tenant`
+    RPC returned 200 → redirected into `/[slug]/dashboard`; the new workspace appears in the
+    switcher as Owner. Logs: `POST /workspaces/new 303 → GET /[slug]/dashboard 200`.
+- **Hosted schema deployed.** `supabase link` + `supabase db push` applied migrations
+  `0001–0011` to the hosted project (`rawqtkwsvjzmhshkjpve`); `supabase migration list` confirms
+  **Local == Remote** for all 11. The hosted app now supports auth **and** tenancy (previously
+  the hosted DB had none of our tables).
+
+### ⬜ Outstanding / notes
+
+- **Hosted has no seed data** (seed.sql is local-only) — correct for a real environment; a new
+  user signs up and creates their own workspace.
+- **Two Phase 1 auth flows** (recovery → update, unconfirmed sign-in) still unverified — email
+  rate limit.
+- **Future hardening:** any authenticated user can create *unlimited* workspaces — rate-limiting
+  tenant creation is a Phase-8 item.
+
+### Manual configuration steps
+
+- **Hosted deploy (done):** `supabase link --project-ref rawqtkwsvjzmhshkjpve` then
+  `supabase db push`. The CLI connected on its own access token — no DB-password prompt. A
+  **non-fatal** warning about caching the pgdelta catalog appeared during push; it does not
+  affect the applied migrations (confirmed by `migration list`).
+- **Local E2E cleanup:** `.env.development.local` (gitignored) forces the dev server to the
+  **local** stack; delete it to point dev at hosted. Local test tenants are throwaway
+  (`supabase db reset`).
+
+### Security considerations
+
+- **Tenant creation is controlled** — only via the `create_tenant` SECURITY DEFINER function;
+  `tenants` has no INSERT policy, so users can't insert arbitrary tenant rows, and the creator
+  is always made owner.
+- **No unbounded-creation guard yet** — an authenticated user can create unlimited workspaces;
+  flagged for Phase-8 hardening.
+- **Hosted is now live with the schema** — its RLS/isolation is identical to what the pgTAP
+  suite proves locally + in CI, but has not been separately re-tested directly against hosted.
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local)
+supabase db reset && supabase test db    # migrations 0001-0011 + seed; expect 26/26
+
+# Hosted (already applied; run to push future migrations)
+supabase db push
+
+# Next Phase 3 branch: feature/employee-directory  (staff enter the system)
+```
+
+---
+
+## 2026-07-19: audit foundation (append-only audit_events)
 
 Phase 2's last feature branch. Adds the append-only audit trail (migration `0010`). Schema +
 RLS + tests only — the app-layer write API and viewer UI are deliberately deferred.
