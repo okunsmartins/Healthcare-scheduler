@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowRight, CalendarCheck } from 'lucide-react';
+import { ArrowRight, CalendarCheck, Plus } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
 import { SignOutButton } from '@/components/shell/sign-out-button';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
+import { cn } from '@/lib/utils/cn';
 import { getMyMemberships } from '@/lib/tenancy';
 
 export const metadata: Metadata = { title: 'Workspaces' };
@@ -44,32 +46,44 @@ export default async function WorkspacesPage() {
           <div className="mt-8 rounded-lg border bg-card p-6 text-card-foreground">
             <p className="font-medium">You’re not a member of any workspace yet.</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ask a workspace owner to invite you. In-app workspace creation is coming
-              soon.
+              Create one to get started, or ask a workspace owner to invite you.
             </p>
+            <Link href="/workspaces/new" className={cn(buttonVariants(), 'mt-4')}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Create a workspace
+            </Link>
           </div>
         ) : (
-          <ul className="mt-8 space-y-3">
-            {memberships.map((m) => (
-              <li key={m.tenantId}>
-                <Link
-                  href={`/${m.slug}/dashboard`}
-                  className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{m.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {m.roleName}
+          <>
+            <ul className="mt-8 space-y-3">
+              {memberships.map((m) => (
+                <li key={m.tenantId}>
+                  <Link
+                    href={`/${m.slug}/dashboard`}
+                    className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{m.name}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {m.roleName}
+                      </span>
                     </span>
-                  </span>
-                  <ArrowRight
-                    className="h-5 w-5 shrink-0 text-muted-foreground"
-                    aria-hidden
-                  />
-                </Link>
-              </li>
-            ))}
-          </ul>
+                    <ArrowRight
+                      className="h-5 w-5 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/workspaces/new"
+              className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 w-full')}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Create a new workspace
+            </Link>
+          </>
         )}
       </main>
     </div>
