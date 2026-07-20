@@ -4,9 +4,10 @@
 -- their own tenant's audit events — and that the audit trail is append-only.
 
 begin;
-select plan(22);
+select plan(26);
 
--- Two auth users (the trigger creates their profiles), two tenants, one membership each.
+-- Three auth users (the trigger creates their profiles). A and B get a tenant each; C has
+-- none (used to test self-serve workspace creation via create_tenant).
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, created_at, updated_at,
                         raw_app_meta_data, raw_user_meta_data)
@@ -14,7 +15,9 @@ values
   ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'a@isolation.test', 'x', now(), now(), now(), '{}', '{}'),
   ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'b@isolation.test', 'x', now(), now(), now(), '{}', '{}');
+   'authenticated', 'authenticated', 'b@isolation.test', 'x', now(), now(), now(), '{}', '{}'),
+  ('33333333-3333-3333-3333-333333333333', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'c@isolation.test', 'x', now(), now(), now(), '{}', '{}');
 
 insert into public.tenants (id, slug, name) values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'tenant-a', 'Tenant A'),
@@ -114,6 +117,27 @@ select ok(not has_table_privilege('authenticated', 'public.audit_events', 'UPDAT
   'audit events cannot be updated (append-only)');
 select ok(not has_table_privilege('authenticated', 'public.audit_events', 'DELETE'),
   'audit events cannot be deleted (append-only)');
+
+-- ===== Self-serve onboarding: User C (no memberships) creates a workspace =====
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333"}', true);
+select public.create_tenant('Acme Health');
+select count(*)::int as c_tenants  from public.tenants where slug = 'acme-health' \gset
+select count(*)::int as c_members  from public.memberships \gset
+reset role;
+
+select is(:c_tenants, 1, 'create_tenant: the new workspace is visible to its creator');
+select is(:c_members, 1, 'create_tenant: the creator gets exactly one membership');
+select is(
+  (select count(*)::int from public.tenant_settings ts
+     join public.tenants t on t.id = ts.tenant_id where t.slug = 'acme-health'),
+  1, 'create_tenant: a tenant_settings row is created');
+select is(
+  (select rd.key from public.memberships m
+     join public.tenants t on t.id = m.tenant_id
+     join public.role_definitions rd on rd.id = m.role_id
+   where t.slug = 'acme-health'),
+  'owner', 'create_tenant: the creator is the owner');
 
 select * from finish();
 rollback;
