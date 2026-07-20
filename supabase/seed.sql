@@ -53,3 +53,11 @@ insert into public.departments (tenant_id, name, code) values
   ('a0000000-0000-0000-0000-0000000000a1', 'Maternity', 'MAT'),
   ('a0000000-0000-0000-0000-0000000000a2', 'General Practice', 'GP')
 on conflict (tenant_id, code) do nothing;
+
+-- A few staff for the demo workspaces.
+insert into public.employees (tenant_id, full_name, email, job_title, employment_type) values
+  ('a0000000-0000-0000-0000-0000000000a1', 'Aoife Byrne', 'aoife.byrne@example.test', 'Staff Nurse', 'permanent'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Conor Walsh', 'conor.walsh@example.test', 'Healthcare Assistant', 'permanent'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Saoirse Nolan', null, 'Bank Nurse', 'bank'),
+  ('a0000000-0000-0000-0000-0000000000a2', 'Niamh Kelly', 'niamh.kelly@example.test', 'Practice Nurse', 'permanent')
+on conflict do nothing;
