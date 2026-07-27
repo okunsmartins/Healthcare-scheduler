@@ -4,10 +4,11 @@
 -- own tenant's audit events and employees — and that the audit trail is append-only.
 
 begin;
-select plan(30);
+select plan(33);
 
--- Three auth users (the trigger creates their profiles). A and B get a tenant each; C has
--- none (used to test self-serve workspace creation via create_tenant).
+-- Four auth users (the trigger creates their profiles). A and B get a tenant each; C has
+-- none (used to test self-serve workspace creation via create_tenant); D is a viewer of
+-- Tenant A (member, but without staff.manage — used to test the employee write gate).
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, created_at, updated_at,
                         raw_app_meta_data, raw_user_meta_data)
@@ -17,7 +18,9 @@ values
   ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'b@isolation.test', 'x', now(), now(), now(), '{}', '{}'),
   ('33333333-3333-3333-3333-333333333333', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'c@isolation.test', 'x', now(), now(), now(), '{}', '{}');
+   'authenticated', 'authenticated', 'c@isolation.test', 'x', now(), now(), now(), '{}', '{}'),
+  ('44444444-4444-4444-4444-444444444444', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'd@isolation.test', 'x', now(), now(), now(), '{}', '{}');
 
 insert into public.tenants (id, slug, name) values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'tenant-a', 'Tenant A'),
@@ -32,6 +35,10 @@ from public.role_definitions where key = 'owner' and tenant_id is null;
 insert into public.memberships (tenant_id, profile_id, role_id)
 select 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', id
 from public.role_definitions where key = 'owner' and tenant_id is null;
+-- User D: viewer of Tenant A (a member, but the viewer role has no staff.manage).
+insert into public.memberships (tenant_id, profile_id, role_id)
+select 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', id
+from public.role_definitions where key = 'viewer' and tenant_id is null;
 
 -- Departments: two in Tenant A (Emergency, Ward A), one in Tenant B (Theatre).
 insert into public.departments (id, tenant_id, name, code) values
@@ -52,11 +59,12 @@ insert into public.audit_events (tenant_id, actor_id, action, entity_type) value
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'tenant.updated', 'tenant'),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'membership.created', 'membership');
 
--- Employees: two in Tenant A, one in Tenant B.
-insert into public.employees (tenant_id, full_name, job_title) values
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Aoife Byrne', 'Staff Nurse'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Conor Walsh', 'Healthcare Assistant'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Niamh Kelly', 'Staff Nurse');
+-- Employees: two in Tenant A, one in Tenant B. Explicit ids so the write-path tests below
+-- can target a specific Tenant A row.
+insert into public.employees (id, tenant_id, full_name, job_title) values
+  ('ee111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Aoife Byrne', 'Staff Nurse'),
+  ('ee222222-2222-2222-2222-222222222222', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Conor Walsh', 'Healthcare Assistant'),
+  ('ee333333-3333-3333-3333-333333333333', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Niamh Kelly', 'Staff Nurse');
 
 -- ===== As User A (scoped to Emergency) =====
 set local role authenticated;
@@ -83,7 +91,7 @@ reset role;
 
 select is(:a_tenants,     1, 'User A sees exactly one tenant');
 select is(:a_tenant_b,    0, 'User A cannot see Tenant B');
-select is(:a_members,     1, 'User A sees only their own membership');
+select is(:a_members,     2, 'User A sees both memberships in their tenant (A + viewer D), not Tenant B''s');
 select is(:a_settings_b,  0, 'User A cannot see Tenant B settings');
 select is(:a_departments, 1, 'User A (scoped to Emergency) sees exactly one department');
 select is(:a_dept_ed,     1, 'User A sees their scoped department (Emergency)');
@@ -133,6 +141,34 @@ select ok(not has_table_privilege('authenticated', 'public.audit_events', 'UPDAT
   'audit events cannot be updated (append-only)');
 select ok(not has_table_privilege('authenticated', 'public.audit_events', 'DELETE'),
   'audit events cannot be deleted (append-only)');
+
+-- ===== Employee write path is gated on staff.manage =====
+-- Cross-tenant: User B (owner of Tenant B) cannot modify a Tenant A employee — the update
+-- policy's USING (app.is_member) hides the row, so the statement changes nothing (no error).
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222"}', true);
+update public.employees set job_title = 'HACKED'
+  where id = 'ee111111-1111-1111-1111-111111111111';
+reset role;
+select is(
+  (select job_title from public.employees where id = 'ee111111-1111-1111-1111-111111111111'),
+  'Staff Nurse', 'User B cannot update a Tenant A employee (cross-tenant, RLS hides the row)');
+
+-- Within-tenant: User D is a member of Tenant A but a viewer (no staff.manage), so the
+-- write policies' WITH CHECK rejects both update and insert (SQLSTATE 42501).
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"44444444-4444-4444-4444-444444444444"}', true);
+select throws_ok(
+  $$ update public.employees set job_title = 'edited'
+       where id = 'ee111111-1111-1111-1111-111111111111' $$,
+  '42501', NULL,
+  'A viewer cannot update an employee (no staff.manage)');
+select throws_ok(
+  $$ insert into public.employees (tenant_id, full_name)
+       values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Mallory') $$,
+  '42501', NULL,
+  'A viewer cannot add an employee (no staff.manage)');
+reset role;
 
 -- ===== Self-serve onboarding: User C (no memberships) creates a workspace =====
 set local role authenticated;
