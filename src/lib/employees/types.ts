@@ -19,6 +19,17 @@ export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = {
   agency: 'Agency',
 };
 
+/** Lifecycle statuses a staff record can hold, in the order they appear in the edit form. */
+export type EmployeeStatus = Employee['status'];
+export const EMPLOYEE_STATUS: EmployeeStatus[] = ['active', 'suspended', 'archived'];
+
+/** Display labels for the staff lifecycle status (archiving is the soft-delete). */
+export const EMPLOYEE_STATUS_LABEL: Record<EmployeeStatus, string> = {
+  active: 'Active',
+  suspended: 'Suspended',
+  archived: 'Archived',
+};
+
 /** Roles that may add/manage staff — mirrors the `staff.manage` grant (RLS is authoritative). */
 export function canManageStaff(roleKey: string): boolean {
   return roleKey === 'owner' || roleKey === 'admin' || roleKey === 'manager';
