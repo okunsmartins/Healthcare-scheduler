@@ -3,11 +3,13 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — started with `feature/tenant-onboarding`.
+- **Current focus:** Phase 3 (organisation & workforce) — `feature/employee-directory` merged
+  (**PR #15**); staff records now exist and the People page is a real directory.
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
-- **Verification backends:** a **local** Supabase stack via the CLI (migrations, RLS, tenancy —
-  Docker required) + the **hosted** project, now carrying the full schema (migrations `0001–0011`).
+- **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0012`, RLS,
+  tenancy — Docker required) + the **hosted** project, carrying migrations `0001–0011` (the `0012`
+  employees migration is **not yet pushed to hosted** — see Manual configuration steps).
 
 **How to read this:** a requirement is only listed under **Completed** if it was
 **exercised end-to-end against the live backend**. Anything implemented but not yet run
@@ -16,7 +18,82 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-20: self-serve workspace creation (Phase 3) + hosted schema deployed
+## Latest — 2026-07-27: employee directory (Phase 3)
+
+Staff enter the system (**PR #15**, merged). The People page turns from a "coming soon" stub
+into a real, tenant-scoped directory, and managers can add staff. This is the foundation for
+Epic J (bank staff directory) in [`BANK_STAFF_BACKLOG.md`](BANK_STAFF_BACKLOG.md) — search,
+grade/skills, and department eligibility land on later branches.
+
+### ✅ Completed requirements (verified)
+
+- **`employees` table** (migration `0012`): `tenant_id`, `full_name`, `email`, `job_title`,
+  `employment_type` (new `public.employment_type` enum: `permanent | bank | agency`), `status`
+  (reuses `public.lifecycle_status`), timestamps + `updated_at` trigger. Indexed on
+  `(tenant_id, full_name)`.
+- **New `staff.manage` permission** (granted to owner + admin + manager). **Deny-by-default RLS:**
+  any tenant **member** may read the directory (`app.is_member`); only `staff.manage` holders may
+  `INSERT/UPDATE/DELETE` (`app.has_permission(tenant_id, 'staff.manage')`).
+- **People page is a real directory.** Lists the tenant's staff (name + email, job title,
+  employment type, status badge); empty-state copy differs for managers vs members. Managers get
+  an **Add staff** action; `/people/new` renders a validated form. Non-managers are redirected off
+  `/people/new` (page-level guard), and the DB is the authoritative check on the insert.
+- **`addEmployeeAction`** re-resolves the tenant from the caller's memberships server-side (never
+  trusts the client-bound slug), Zod-validates the input, and inserts through the RLS-aware server
+  client — a member without `staff.manage` gets a friendly "you may not have permission" error, not
+  a row.
+- **Isolation suite extended 26 → 30 (verified locally + CI).** `supabase db reset` applies
+  `0001–0012` + seed; `supabase test db` → **30/30**. New cases: each of two users reads only their
+  own tenant's employees (zero of the other's). CI's `db-isolation` job runs the suite, so the
+  employee boundary is gated on every PR. App gate green (format, lint, typecheck, **31 tests**,
+  build).
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **Directory is list + add only.** No edit/archive UI, no search, no detail view, and no
+  grade/skills/department-eligibility yet (Epic J1) — those are later Phase 3/4 branches. The
+  `UPDATE`/`DELETE` RLS policies exist, but nothing in the app calls them yet.
+- **No audit write on staff creation.** `app.log_audit` exists but `addEmployeeAction` does not yet
+  emit an audit event — wire this in when the audit write API (`src/lib/audit`) is built.
+- **`0012` not on hosted.** Local + CI are at `0012`; the hosted project is still at `0011`.
+- **Two Phase 1 auth flows** (recovery → update, unconfirmed sign-in) — still email-rate-limited.
+
+### Manual configuration steps
+
+- **Push `0012` to hosted when needed:** `supabase db push` (applies the employees migration to the
+  linked hosted project). Not required for local/CI verification. The hosted project has no seed
+  data, so the directory there starts empty.
+- DB verification otherwise uses the existing local flow (`supabase db reset` + `supabase test db`;
+  `supabase start -x storage-api` on Windows).
+
+### Security considerations
+
+- **Write is permission-gated at the database**, not just the UI — the `/people/new` page guard and
+  the "Add staff" button are convenience; a member forging an insert is still rejected by the
+  `staff.manage` `WITH CHECK`. Proven by the 30/30 isolation suite.
+- **Cross-tenant reads are impossible** — `employees_select` is `app.is_member(tenant_id)`, and the
+  suite asserts each user sees zero of the other tenant's staff.
+- **Server action re-resolves the tenant** from verified memberships, so a tampered form field can't
+  target another workspace; `email` is stored as typed (synthetic data only — no PII policy yet).
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local) — migrations 0001-0012 + seed; expect 30/30
+supabase db reset && supabase test db
+
+# Push the employees migration to hosted (optional, when hosted parity is needed)
+supabase db push
+
+# Next Phase 3 branch: facility / department management UI, or extend the directory (edit/search)
+```
+
+---
+
+## 2026-07-20: self-serve workspace creation (Phase 3) + hosted schema deployed
 
 Phase 3 opener (**PR #13**, merged): a signed-in user can now create their own workspace. Also
 deployed the full schema to the **hosted** Supabase project for the first time.
