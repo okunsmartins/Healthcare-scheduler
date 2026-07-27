@@ -1,10 +1,10 @@
--- Cross-tenant + department + audit isolation test (pgTAP). Run with: supabase test db
+-- Cross-tenant + department + audit + employee isolation test (pgTAP). Run: supabase test db
 -- Proves that under RLS an authenticated user sees ONLY their own tenant's rows, only the
--- departments they are scoped to (unrestricted when they have no department links), and only
--- their own tenant's audit events — and that the audit trail is append-only.
+-- departments they are scoped to (unrestricted when they have no department links), only their
+-- own tenant's audit events and employees — and that the audit trail is append-only.
 
 begin;
-select plan(26);
+select plan(30);
 
 -- Three auth users (the trigger creates their profiles). A and B get a tenant each; C has
 -- none (used to test self-serve workspace creation via create_tenant).
@@ -52,6 +52,12 @@ insert into public.audit_events (tenant_id, actor_id, action, entity_type) value
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'tenant.updated', 'tenant'),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'membership.created', 'membership');
 
+-- Employees: two in Tenant A, one in Tenant B.
+insert into public.employees (tenant_id, full_name, job_title) values
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Aoife Byrne', 'Staff Nurse'),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Conor Walsh', 'Healthcare Assistant'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Niamh Kelly', 'Staff Nurse');
+
 -- ===== As User A (scoped to Emergency) =====
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111"}', true);
@@ -70,6 +76,9 @@ select count(*)::int as a_dept_b      from public.departments
 select count(*)::int as a_audit       from public.audit_events \gset
 select count(*)::int as a_audit_b     from public.audit_events
   where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
+select count(*)::int as a_employees   from public.employees \gset
+select count(*)::int as a_employees_b from public.employees
+  where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
 reset role;
 
 select is(:a_tenants,     1, 'User A sees exactly one tenant');
@@ -82,6 +91,8 @@ select is(:a_dept_wa,     0, 'User A does not see an unscoped department (Ward A
 select is(:a_dept_b,      0, 'User A cannot see Tenant B departments');
 select is(:a_audit,       2, 'User A (audit.view) sees their tenant''s audit events');
 select is(:a_audit_b,     0, 'User A cannot see Tenant B audit events');
+select is(:a_employees,   2, 'User A sees their tenant''s employees');
+select is(:a_employees_b, 0, 'User A cannot see Tenant B employees');
 
 -- ===== As User B (unrestricted) =====
 set local role authenticated;
@@ -97,6 +108,9 @@ select count(*)::int as b_dept_a      from public.departments
 select count(*)::int as b_audit       from public.audit_events \gset
 select count(*)::int as b_audit_a     from public.audit_events
   where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
+select count(*)::int as b_employees   from public.employees \gset
+select count(*)::int as b_employees_a from public.employees
+  where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
 reset role;
 
 select is(:b_tenants,     1, 'User B sees exactly one tenant');
@@ -107,6 +121,8 @@ select is(:b_departments, 1, 'User B (unrestricted) sees their tenant department
 select is(:b_dept_a,      0, 'User B cannot see Tenant A departments');
 select is(:b_audit,       1, 'User B sees their tenant''s audit event');
 select is(:b_audit_a,     0, 'User B cannot see Tenant A audit events');
+select is(:b_employees,   1, 'User B sees their tenant''s employee');
+select is(:b_employees_a, 0, 'User B cannot see Tenant A employees');
 
 -- The audit trail is append-only for API roles (writes go via app.log_audit / service role).
 select ok(has_table_privilege('authenticated', 'public.audit_events', 'SELECT'),
