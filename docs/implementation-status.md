@@ -3,8 +3,8 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — `feature/employee-directory` merged
-  (**PR #15**); staff records now exist and the People page is a real directory.
+- **Current focus:** Phase 3 (organisation & workforce) — the employee directory now supports
+  edit, search, and archive (**PR #16**) on top of list+add (**PR #15**).
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
 - **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0012`, RLS,
@@ -18,7 +18,84 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-27: employee directory (Phase 3)
+## Latest — 2026-07-27: staff directory management — edit · search · archive (Phase 3)
+
+Extends the directory (**PR #16**, merged) beyond list+add. No schema change — the update/delete
+RLS policies already shipped in migration `0012`, so this is an app-layer + tests branch and
+hosted parity is unaffected.
+
+### ✅ Completed requirements (verified)
+
+- **Edit a staff member** at `/people/[id]/edit` — a manager-gated page reusing a shared
+  `EmployeeFields` component (add + edit now share one field definition). `updateEmployeeAction`
+  re-resolves the tenant from the caller's memberships (never trusts the client-bound slug) and
+  writes through the RLS-aware server client.
+- **Archive / suspend / restore** via a status control on the edit form. Archiving is the
+  **soft-delete** — records are never hard-deleted (correct for staff/audit history); the row
+  status badge reflects the change.
+- **Search by name** (`?q=`) with a Clear affordance and a search-specific empty state. `%`/`_`
+  are escaped so a typed wildcard can't broaden the match; `.ilike` is parameterised.
+- **Isolation suite extended 30 → 33 (verified locally + CI).** `supabase db reset` applies
+  `0001–0012` + seed; `supabase test db` → **33/33**. New cases prove the `staff.manage` **write
+  gate**: a cross-tenant update is silently hidden by RLS (the row isn't visible to update), and a
+  viewer (member without `staff.manage`) is rejected with SQLSTATE `42501` on **both** update and
+  insert. App gate green (format, lint, typecheck, **31 tests**, build).
+- **Browser E2E on local Supabase (verified end-to-end).** Signed in as the demo owner of St
+  Mary's: search filtered the table to a single match with a working Clear; edited a staff member
+  and set status → **Archived**, which persisted and re-rendered in the directory. Signed-in
+  context switched to Riverside (where the demo user is a **viewer**): the directory rendered
+  **read-only** (no Add button, no Edit column) and navigating to `/people/new` **redirected** back
+  to `/people`. No console errors.
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **Status badge label for active staff reads "Safe."** The row badge reuses the shared
+  `OperationalStatus` vocabulary (`STATUS_TONE: active → 'safe'`), which has no `active` value, so
+  an active person shows as "Safe". Cosmetic; a clean follow-up is to add an "Active" presentation.
+- **No detail view, no bulk actions, no filter-by-status.** Search is name-only (Epic J1 also wants
+  grade/skills/department-eligibility — later branches). Archived staff still appear in the list
+  (badged); a status filter is a future refinement.
+- **No audit-on-write yet.** `addEmployeeAction`/`updateEmployeeAction` still don't emit audit
+  events — wire in when the audit write API (`src/lib/audit`) is built.
+- **`0012` not on hosted.** Local + CI are at `0012`; the hosted project is still at `0011`.
+- **Two Phase 1 auth flows** (recovery → update, unconfirmed sign-in) — still email-rate-limited.
+
+### Manual configuration steps
+
+- None new. DB verification uses the existing local flow (`supabase db reset` + `supabase test db`;
+  `supabase start -x storage-api` on Windows — the storage health check is flaky). Push `0012` to
+  hosted with `supabase db push` when hosted parity is needed.
+
+### Security considerations
+
+- **The write path is gated at the database, not just the UI.** The `/people/[id]/edit` page guard
+  and the hidden Add/Edit controls are convenience; a member forging an update/insert is still
+  rejected by the `staff.manage` `WITH CHECK` — now proven by the 33/33 suite (viewer → 42501) and
+  observed in the browser (viewer redirected, read-only directory).
+- **Server actions re-resolve the tenant** from verified memberships and scope every write to it,
+  so a tampered `tenantSlug`/`employeeId` can't reach another workspace's rows.
+- **Search input is escaped** (`%`/`_`) and sent via the parameterised `.ilike` builder — no filter
+  injection.
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local) — migrations 0001-0012 + seed; expect 33/33
+supabase db reset && supabase test db
+
+# Push the employees migration to hosted (optional, when hosted parity is needed)
+supabase db push
+
+# Next Phase 3 options: department management UI, or staff detail view / grade+skills (Epic J1)
+```
+
+---
+
+## 2026-07-27: employee directory — foundation (Phase 3)
+
 
 Staff enter the system (**PR #15**, merged). The People page turns from a "coming soon" stub
 into a real, tenant-scoped directory, and managers can add staff. This is the foundation for
