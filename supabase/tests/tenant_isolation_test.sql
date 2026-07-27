@@ -4,7 +4,7 @@
 -- own tenant's audit events and employees — and that the audit trail is append-only.
 
 begin;
-select plan(33);
+select plan(35);
 
 -- Four auth users (the trigger creates their profiles). A and B get a tenant each; C has
 -- none (used to test self-serve workspace creation via create_tenant); D is a viewer of
@@ -168,6 +168,17 @@ select throws_ok(
        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Mallory') $$,
   '42501', NULL,
   'A viewer cannot add an employee (no staff.manage)');
+-- Same viewer also lacks departments.manage, so department writes are rejected.
+select throws_ok(
+  $$ update public.departments set name = 'Renamed'
+       where id = 'aa111111-1111-1111-1111-111111111111' $$,
+  '42501', NULL,
+  'A viewer cannot update a department (no departments.manage)');
+select throws_ok(
+  $$ insert into public.departments (tenant_id, name, code)
+       values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Rogue', 'RG') $$,
+  '42501', NULL,
+  'A viewer cannot add a department (no departments.manage)');
 reset role;
 
 -- ===== Self-serve onboarding: User C (no memberships) creates a workspace =====
