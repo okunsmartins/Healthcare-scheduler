@@ -4,7 +4,7 @@
 -- own tenant's audit events and employees — and that the audit trail is append-only.
 
 begin;
-select plan(35);
+select plan(36);
 
 -- Four auth users (the trigger creates their profiles). A and B get a tenant each; C has
 -- none (used to test self-serve workspace creation via create_tenant); D is a viewer of
@@ -179,6 +179,17 @@ select throws_ok(
        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Rogue', 'RG') $$,
   '42501', NULL,
   'A viewer cannot add a department (no departments.manage)');
+-- Nor scope a member to a department (department access). Target Ward A (aa222222), which
+-- User A is NOT linked to, so only the RLS check (42501) can fire, not a unique conflict.
+select throws_ok(
+  $$ insert into public.department_memberships (tenant_id, department_id, membership_id)
+       values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+               'aa222222-2222-2222-2222-222222222222',
+               (select id from public.memberships
+                  where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+                    and profile_id = '11111111-1111-1111-1111-111111111111' limit 1)) $$,
+  '42501', NULL,
+  'A viewer cannot scope a member to a department (no departments.manage)');
 reset role;
 
 -- ===== Self-serve onboarding: User C (no memberships) creates a workspace =====

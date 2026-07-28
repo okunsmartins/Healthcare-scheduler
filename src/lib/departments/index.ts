@@ -1,8 +1,8 @@
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
-import type { Department, DepartmentStatus } from './types';
+import type { Department, DepartmentMember, DepartmentStatus } from './types';
 
-export type { Department, DepartmentStatus } from './types';
+export type { Department, DepartmentStatus, DepartmentMember } from './types';
 export {
   DEPARTMENT_STATUS,
   DEPARTMENT_STATUS_LABEL,
@@ -58,5 +58,45 @@ export const getDepartment = cache(
 
     if (error || !data) return null;
     return toDepartment(data);
+  },
+);
+
+/**
+ * The tenant's active members, each flagged with whether they are scoped to `departmentId`.
+ * Drives the department-access screen. `department_memberships` is readable to tenant members
+ * under RLS; profiles of co-members are visible via `app.shares_tenant`. Sorted by name.
+ */
+export const getDepartmentAccess = cache(
+  async (tenantId: string, departmentId: string): Promise<DepartmentMember[]> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('memberships')
+      // `profiles!profile_id` disambiguates from the `invited_by` FK (both point at profiles).
+      .select(
+        'id, profiles!profile_id(full_name, email), role_definitions(key), department_memberships(department_id)',
+      )
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active');
+
+    if (error || !data) return [];
+
+    return data
+      .map((row: Record<string, unknown>): DepartmentMember => {
+        const profile = row.profiles as {
+          full_name: string | null;
+          email: string | null;
+        } | null;
+        const role = row.role_definitions as { key: string } | null;
+        const links = row.department_memberships as { department_id: string }[] | null;
+        const email = profile?.email ?? null;
+        return {
+          membershipId: row.id as string,
+          name: profile?.full_name || email || 'Unknown member',
+          email,
+          roleKey: role?.key ?? '',
+          assigned: Boolean(links?.some((l) => l.department_id === departmentId)),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
 );

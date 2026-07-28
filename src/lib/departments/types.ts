@@ -13,6 +13,17 @@ export interface Department {
   memberCount: number;
 }
 
+/** A tenant member as shown on the department-access screen, with their current scoping. */
+export interface DepartmentMember {
+  /** The membership id (what `department_memberships` links to), not the profile id. */
+  membershipId: string;
+  name: string;
+  email: string | null;
+  roleKey: string;
+  /** True when this member is scoped to the department in question. */
+  assigned: boolean;
+}
+
 /** Lifecycle statuses in the order they appear in the edit form. */
 export const DEPARTMENT_STATUS: DepartmentStatus[] = ['active', 'suspended', 'archived'];
 
