@@ -43,8 +43,8 @@ export default async function DepartmentsPage({
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Departments</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            The departments in this workspace. Assigning staff to departments arrives on a
-            later branch.
+            The departments in this workspace. Use “scoped” to choose which members are
+            restricted to a department.
           </p>
         </div>
         <Link
@@ -82,7 +82,15 @@ export default async function DepartmentsPage({
                 <tr key={d.id} className="border-b last:border-0">
                   <td className="px-4 py-3 font-medium text-foreground">{d.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{d.code ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{d.memberCount}</td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/${tenantSlug}/settings/departments/${d.id}/members`}
+                      className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Manage access for ${d.name} (${d.memberCount} scoped)`}
+                    >
+                      {d.memberCount} scoped
+                    </Link>
+                  </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={STATUS_TONE[d.status]} />
                   </td>

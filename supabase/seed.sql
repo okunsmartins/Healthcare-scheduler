@@ -25,6 +25,26 @@ values (
 )
 on conflict (id) do nothing;
 
+-- A second St Mary's member (Scheduler) so department-access assignment is demonstrable
+-- without the owner having to scope themselves. Same '' token rule as above.
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  email_change_token_current, phone_change, phone_change_token, reauthentication_token
+)
+values (
+  'd0000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated', 'authenticated', 'nuala@local.test',
+  crypt('DemoPass123!', gen_salt('bf')),
+  now(), now(), now(),
+  '{"provider":"email","providers":["email"]}',
+  '{"full_name":"Nuala Doyle"}',
+  '', '', '', '', '', '', '', ''
+)
+on conflict (id) do nothing;
+
 insert into public.tenants (id, slug, name) values
   ('a0000000-0000-0000-0000-0000000000a1', 'st-marys', 'St Mary''s Hospital'),
   ('a0000000-0000-0000-0000-0000000000a2', 'riverside-clinic', 'Riverside Clinic')
@@ -44,6 +64,12 @@ on conflict (tenant_id, profile_id) do nothing;
 insert into public.memberships (tenant_id, profile_id, role_id)
 select 'a0000000-0000-0000-0000-0000000000a2', 'd0000000-0000-0000-0000-000000000001', id
 from public.role_definitions where key = 'viewer' and tenant_id is null
+on conflict (tenant_id, profile_id) do nothing;
+
+-- Nuala: Scheduler of St Mary's (unrestricted until assigned to a department).
+insert into public.memberships (tenant_id, profile_id, role_id)
+select 'a0000000-0000-0000-0000-0000000000a1', 'd0000000-0000-0000-0000-000000000002', id
+from public.role_definitions where key = 'scheduler' and tenant_id is null
 on conflict (tenant_id, profile_id) do nothing;
 
 -- Departments for the demo workspaces. The demo user is an owner (unrestricted), so no
