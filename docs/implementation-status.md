@@ -3,8 +3,8 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — the employee directory now supports
-  edit, search, and archive (**PR #16**) on top of list+add (**PR #15**).
+- **Current focus:** Phase 3 (organisation & workforce) — department management UI shipped
+  (**PR #17**); the employee directory supports list/add/edit/search/archive (**PR #15/#16**).
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
 - **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0012`, RLS,
@@ -18,7 +18,85 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-27: staff directory management — edit · search · archive (Phase 3)
+## Latest — 2026-07-27: department management UI (Phase 3)
+
+Surfaces the `departments` table (schema shipped in Phase 2, migrations `0008/0009`) as a real
+management screen under **Settings → Departments** (**PR #17**, merged). No schema change — the
+department RLS policies already exist, so this is app-layer + tests and hosted parity is
+unaffected.
+
+### ✅ Completed requirements (verified)
+
+- **Settings is now a hub.** Owner/admin see a **Departments** card; everyone else keeps the
+  existing placeholder. Gated by `canManageDepartments` (owner + admin — mirrors the
+  `departments.manage` grant, which excludes manager).
+- **Department CRUD** at `/settings/departments` (+ `/new`, `/[id]/edit`): list (name, code,
+  **member count**, status), create, and edit (rename, optional unique code, archive). Member
+  count comes from a PostgREST aggregate embed on `department_memberships`.
+- **Code handling.** Codes are uppercased; a duplicate code (unique per tenant, DB-enforced)
+  surfaces as a **friendly field error** (Postgres `23505` mapped to the code field), not a crash.
+  Archiving is the soft-delete (status → `archived`).
+- **Server actions re-resolve the tenant** from the caller's memberships (never the client slug)
+  and write through the RLS-aware client; every write is gated on `departments.manage` at the DB.
+- **Nested under Settings, not primary nav** — deliberately, to respect the 4-item mobile bottom
+  nav (`grid-cols-4`).
+- **Isolation suite extended 33 → 35 (verified locally + CI).** `supabase db reset` applies
+  `0001–0012` + seed; `supabase test db` → **35/35**. New cases: a viewer (member without
+  `departments.manage`) is rejected with SQLSTATE `42501` on **both** department update and insert.
+  App gate green (format, lint, typecheck, **31 tests**, build).
+- **Browser E2E on local Supabase (verified end-to-end).** As the demo owner of St Mary's: listed
+  the seeded departments, created a new one (code `icu` → **`ICU`**, uppercased), hit the
+  **duplicate-code** error path (stayed on the form with a field error, no crash), and
+  edited a department to **Archived** (persisted + re-rendered). As a Riverside **viewer**: the
+  Settings hub showed the placeholder (no Departments card) and `/settings/departments`
+  **redirected** to `/settings`. No console errors.
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **No staff-to-department assignment yet.** The `department_memberships` table (which drives the
+  existing department scoping) can still only be populated by seed — the assignment UI is the
+  immediate next branch. Until then member counts are 0 in fresh workspaces.
+- **Status badge label for active shows "Safe"** — same shared-`OperationalStatus` cosmetic as the
+  employee directory; an "Active" presentation is a clean follow-up.
+- **No audit-on-write** for department create/edit (wire in when `src/lib/audit` lands).
+- **`0012` not on hosted.** Local + CI are at `0012`; hosted is still at `0011`.
+- **Two Phase 1 auth flows** (recovery → update, unconfirmed sign-in) — still email-rate-limited.
+
+### Manual configuration steps
+
+- None new. DB verification uses the existing local flow (`supabase db reset` + `supabase test db`;
+  `supabase start -x storage-api` on Windows). Push `0012` to hosted with `supabase db push` when
+  parity is needed.
+
+### Security considerations
+
+- **Department writes are DB-gated, not just UI-gated.** The Settings card, the page guards, and
+  the redirect are convenience; a member forging an insert/update is rejected by the
+  `departments.manage` `WITH CHECK` — proven by the 35/35 suite (viewer → 42501) and observed in
+  the browser (viewer redirected, placeholder shown).
+- **Server actions re-resolve the tenant** and scope every write to it, so a tampered
+  `tenantSlug`/`departmentId` can't reach another workspace.
+- **The list read is department-scoped** (`app.is_department_member`), but management is limited to
+  owner/admin, who are unrestricted — so they see the whole tenant's departments as intended.
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local) — migrations 0001-0012 + seed; expect 35/35
+supabase db reset && supabase test db
+
+# Push the employees migration to hosted (optional, when hosted parity is needed)
+supabase db push
+
+# Next Phase 3 branch: assign staff to departments (department_memberships UI)
+```
+
+---
+
+## 2026-07-27: staff directory management — edit · search · archive (Phase 3)
 
 Extends the directory (**PR #16**, merged) beyond list+add. No schema change — the update/delete
 RLS policies already shipped in migration `0012`, so this is an app-layer + tests branch and
