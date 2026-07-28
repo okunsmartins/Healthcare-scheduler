@@ -3,8 +3,8 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — department management UI shipped
-  (**PR #17**); the employee directory supports list/add/edit/search/archive (**PR #15/#16**).
+- **Current focus:** Phase 3 (organisation & workforce) — department **access scoping** shipped
+  (**PR #20**) on top of department management (**PR #17**) and the employee directory (**#15/#16**).
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
 - **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0012`, RLS,
@@ -18,7 +18,81 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-27: department management UI (Phase 3)
+## Latest — 2026-07-28: department access scoping (Phase 3)
+
+Activates the department scoping that already had RLS + tests (migrations `0008/0009`): owner/admin
+choose which members are scoped to a department (**PR #20**, merged). No schema change — hosted
+parity is unaffected.
+
+### ✅ Completed requirements (verified)
+
+- **Manage department access** at `/settings/departments/[id]/members` — a checklist of the
+  tenant's active members (name, email, role) with their current scoping. **Save reconciles** the
+  desired set with the minimal `department_memberships` inserts/deletes. Reached from the **"N
+  scoped"** link on the departments list.
+- **Semantics surfaced in the UI:** a member scoped to no department is unrestricted (sees all);
+  scoped to one or more, they see only those — enforced by `app.is_department_member` (from Phase 2).
+- **`getDepartmentAccess`** embeds each member's profile + role + department links;
+  `profiles!profile_id` disambiguates the second FK to profiles (`invited_by`).
+- **`setDepartmentAccessAction`** re-resolves the tenant, **intersects submitted ids with the
+  tenant's real members** (a forged membership id can't be linked), and RLS-gates every write on
+  `departments.manage`.
+- **Seed** gained a second St Mary's member (Nuala, Scheduler) so assignment is demonstrable without
+  the owner having to scope themselves.
+- **Isolation suite extended 35 → 36 (verified locally + CI).** `supabase db reset` applies
+  `0001–0012` + seed; `supabase test db` → **36/36**. New case: a viewer (member without
+  `departments.manage`) is rejected `42501` when scoping a member to a department. App gate green
+  (format, lint, typecheck, **31 tests**, build).
+- **Browser E2E on local Supabase, with direct DB confirmation.** As the demo owner: assigned Nuala
+  to Emergency → a `department_memberships` row was created (confirmed by SQL), the list showed **"1
+  scoped"**, and the checkbox reflected it; then unassigned → the row was deleted, back to **"0
+  scoped"**. No console errors.
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **A member scoped to a department only sees those departments** — including admins. So an owner who
+  scopes *themselves* would stop seeing others in the management list. The UI notes the semantics and
+  the seed avoids it, but a future refinement could exempt managers from their own scoping.
+- **No audit-on-write** for access changes (wire in when `src/lib/audit` lands).
+- **Member identity is thin** — the list shows profile name/email/role; there is no invite flow yet,
+  so members only exist via seed or self-serve workspace creation.
+- **`0012` not on hosted.** Local + CI are at `0012`; hosted is still at `0011`.
+- **Status badge "Safe"** for active rows and the two email-blocked Phase 1 auth flows — unchanged.
+
+### Manual configuration steps
+
+- None new. DB verification uses the existing local flow (`supabase db reset` + `supabase test db`;
+  `supabase start -x storage-api` on Windows). Push `0012` to hosted with `supabase db push` when
+  parity is needed.
+
+### Security considerations
+
+- **Access writes are DB-gated on `departments.manage`** (owner/admin), proven by the 36/36 suite
+  (viewer → 42501) and observed in the browser.
+- **Submitted membership ids are intersected with the tenant's real members** before any insert, so a
+  tampered form can't link an arbitrary/foreign membership; the tenant is re-resolved server-side and
+  scopes every write.
+- **`department_memberships` reads are tenant-scoped** (`app.is_member`), so counts/among members
+  never leak across tenants.
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local) — migrations 0001-0012 + seed; expect 36/36
+supabase db reset && supabase test db
+
+# Push the employees migration to hosted (optional, when hosted parity is needed)
+supabase db push
+
+# Next Phase 3 options: member invites, staff detail view / grade+skills (Epic J1), or roster start
+```
+
+---
+
+## 2026-07-27: department management UI (Phase 3)
 
 Surfaces the `departments` table (schema shipped in Phase 2, migrations `0008/0009`) as a real
 management screen under **Settings → Departments** (**PR #17**, merged). No schema change — the
