@@ -63,8 +63,9 @@ Suggested semantic-version milestones:
 > - `feature/tenant-memberships` — schema + seed done; **membership management UI/services** not built.
 > - `feature/department-access` (🟨) — migrations `0008–0009` deliver `departments`,
 >   `department_memberships`, the `app.is_department_member` helper (unrestricted when a member
->   has no department links), and department-scoped RLS. **Department management UI is not
->   built** (arrives with Phase 3 `feature/department-management`).
+>   has no department links), and department-scoped RLS. The **department management UI** (CRUD)
+>   shipped in Phase 3 `feature/department-management` (PR #17), and the **access-scoping UI**
+>   (assign members to departments) in `feature/department-staff-assignment` (PR #20).
 > - `feature/audit-foundation` (🟨) — migration `0010` delivers append-only `audit_events`
 >   (insert/update/delete revoked from API roles; readable with the new `audit.view`
 >   permission), the `app.log_audit()` SECURITY DEFINER writer, and isolation-test coverage.
@@ -73,7 +74,8 @@ Suggested semantic-version milestones:
 > - `security/tenant-rls-policies` — policies now cover tenants, memberships, departments, **and
 >   audit_events**; the hardening pass re-runs over every later tenant-owned table as it lands.
 > - `test/tenant-isolation-suite` — the pgTAP suite now covers **cross-tenant, department-
->   scoping, and audit** cases (**22/22**) and **runs in CI** on every PR.
+>   scoping, audit, employee, and department-write-gate** cases (**36/36**) and **runs in CI** on
+>   every PR. It grows with each Phase 3 branch that adds a tenant-owned table.
 >
 > Local Supabase ports are remapped to `553xx` (the `5432x` defaults collide with a Windows
 > reserved range). See [`DATA_MODEL.md`](DATA_MODEL.md).
