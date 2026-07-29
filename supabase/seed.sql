@@ -87,3 +87,23 @@ insert into public.employees (tenant_id, full_name, email, job_title, employment
   ('a0000000-0000-0000-0000-0000000000a1', 'Saoirse Nolan', null, 'Bank Nurse', 'bank'),
   ('a0000000-0000-0000-0000-0000000000a2', 'Niamh Kelly', 'niamh.kelly@example.test', 'Practice Nurse', 'permanent')
 on conflict do nothing;
+
+-- A skill catalog for St Mary's, and a couple of assignments (skill-assignment UI lands next).
+insert into public.skills (tenant_id, name) values
+  ('a0000000-0000-0000-0000-0000000000a1', 'IV Cannulation'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Paediatric Life Support'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Manual Handling'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Medication Administration')
+on conflict (tenant_id, name) do nothing;
+
+insert into public.employee_skills (tenant_id, employee_id, skill_id)
+select e.tenant_id, e.id, s.id
+from public.employees e
+join public.skills s on s.tenant_id = e.tenant_id
+where e.tenant_id = 'a0000000-0000-0000-0000-0000000000a1'
+  and (e.full_name, s.name) in (
+    ('Aoife Byrne', 'IV Cannulation'),
+    ('Aoife Byrne', 'Medication Administration'),
+    ('Conor Walsh', 'Manual Handling')
+  )
+on conflict (employee_id, skill_id) do nothing;
