@@ -1,10 +1,12 @@
--- Cross-tenant + department + audit + employee isolation test (pgTAP). Run: supabase test db
+-- Cross-tenant + department + audit + employee + skills isolation test (pgTAP).
+-- Run: supabase test db
 -- Proves that under RLS an authenticated user sees ONLY their own tenant's rows, only the
 -- departments they are scoped to (unrestricted when they have no department links), only their
--- own tenant's audit events and employees — and that the audit trail is append-only.
+-- own tenant's audit events, employees, and skills — that the audit trail is append-only, and
+-- that a member without the relevant permission cannot write (staff.manage / departments.manage).
 
 begin;
-select plan(36);
+select plan(42);
 
 -- Four auth users (the trigger creates their profiles). A and B get a tenant each; C has
 -- none (used to test self-serve workspace creation via create_tenant); D is a viewer of
@@ -66,6 +68,15 @@ insert into public.employees (id, tenant_id, full_name, job_title) values
   ('ee222222-2222-2222-2222-222222222222', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Conor Walsh', 'Healthcare Assistant'),
   ('ee333333-3333-3333-3333-333333333333', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Niamh Kelly', 'Staff Nurse');
 
+-- Skills: two in Tenant A, one in Tenant B; Aoife holds Cannulation (a Tenant A employee_skill).
+insert into public.skills (id, tenant_id, name) values
+  ('ff111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Cannulation'),
+  ('ff222222-2222-2222-2222-222222222222', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Life Support'),
+  ('ff333333-3333-3333-3333-333333333333', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Theatre Prep');
+insert into public.employee_skills (tenant_id, employee_id, skill_id) values
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+   'ee111111-1111-1111-1111-111111111111', 'ff111111-1111-1111-1111-111111111111');
+
 -- ===== As User A (scoped to Emergency) =====
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111"}', true);
@@ -87,6 +98,9 @@ select count(*)::int as a_audit_b     from public.audit_events
 select count(*)::int as a_employees   from public.employees \gset
 select count(*)::int as a_employees_b from public.employees
   where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
+select count(*)::int as a_skills      from public.skills \gset
+select count(*)::int as a_skills_b    from public.skills
+  where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
 reset role;
 
 select is(:a_tenants,     1, 'User A sees exactly one tenant');
@@ -101,6 +115,8 @@ select is(:a_audit,       2, 'User A (audit.view) sees their tenant''s audit eve
 select is(:a_audit_b,     0, 'User A cannot see Tenant B audit events');
 select is(:a_employees,   2, 'User A sees their tenant''s employees');
 select is(:a_employees_b, 0, 'User A cannot see Tenant B employees');
+select is(:a_skills,      2, 'User A sees their tenant''s skills');
+select is(:a_skills_b,    0, 'User A cannot see Tenant B skills');
 
 -- ===== As User B (unrestricted) =====
 set local role authenticated;
@@ -119,6 +135,9 @@ select count(*)::int as b_audit_a     from public.audit_events
 select count(*)::int as b_employees   from public.employees \gset
 select count(*)::int as b_employees_a from public.employees
   where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
+select count(*)::int as b_skills      from public.skills \gset
+select count(*)::int as b_skills_a    from public.skills
+  where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
 reset role;
 
 select is(:b_tenants,     1, 'User B sees exactly one tenant');
@@ -131,6 +150,8 @@ select is(:b_audit,       1, 'User B sees their tenant''s audit event');
 select is(:b_audit_a,     0, 'User B cannot see Tenant A audit events');
 select is(:b_employees,   1, 'User B sees their tenant''s employee');
 select is(:b_employees_a, 0, 'User B cannot see Tenant A employees');
+select is(:b_skills,      1, 'User B sees their tenant''s skill');
+select is(:b_skills_a,    0, 'User B cannot see Tenant A skills');
 
 -- The audit trail is append-only for API roles (writes go via app.log_audit / service role).
 select ok(has_table_privilege('authenticated', 'public.audit_events', 'SELECT'),
@@ -190,6 +211,20 @@ select throws_ok(
                     and profile_id = '11111111-1111-1111-1111-111111111111' limit 1)) $$,
   '42501', NULL,
   'A viewer cannot scope a member to a department (no departments.manage)');
+-- Nor manage the skill catalog or assign skills (staff.manage). Assign Life Support (ff222222),
+-- which Aoife does not already hold, so only the RLS check (42501) can fire.
+select throws_ok(
+  $$ insert into public.skills (tenant_id, name)
+       values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Forged Skill') $$,
+  '42501', NULL,
+  'A viewer cannot add a skill (no staff.manage)');
+select throws_ok(
+  $$ insert into public.employee_skills (tenant_id, employee_id, skill_id)
+       values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+               'ee111111-1111-1111-1111-111111111111',
+               'ff222222-2222-2222-2222-222222222222') $$,
+  '42501', NULL,
+  'A viewer cannot assign a skill to an employee (no staff.manage)');
 reset role;
 
 -- ===== Self-serve onboarding: User C (no memberships) creates a workspace =====

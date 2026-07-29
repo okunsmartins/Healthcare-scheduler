@@ -1,12 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Building2, ChevronRight } from 'lucide-react';
+import { Award, Building2, ChevronRight, type LucideIcon } from 'lucide-react';
 import { PageHeader, ComingSoon } from '@/components/shell/page-header';
 import { resolveTenantContext } from '@/lib/tenancy';
 import { canManageDepartments } from '@/lib/departments';
+import { canManageSkills } from '@/lib/skills';
 
 export const metadata: Metadata = { title: 'Settings' };
+
+interface SettingCard {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}
 
 export default async function SettingsPage({
   params,
@@ -17,36 +25,62 @@ export default async function SettingsPage({
   const tenant = await resolveTenantContext(tenantSlug);
   if (!tenant) notFound();
 
-  const canManageDepts = canManageDepartments(tenant.roleKey);
+  const cards: SettingCard[] = [];
+  if (canManageDepartments(tenant.roleKey)) {
+    cards.push({
+      href: `/${tenantSlug}/settings/departments`,
+      icon: Building2,
+      title: 'Departments',
+      description: 'Create and manage the departments in this workspace.',
+    });
+  }
+  if (canManageSkills(tenant.roleKey)) {
+    cards.push({
+      href: `/${tenantSlug}/settings/skills`,
+      icon: Award,
+      title: 'Skills',
+      description: 'Manage the competencies staff can hold.',
+    });
+  }
 
   return (
     <>
       <PageHeader
         title="Settings"
-        description="Workspace configuration, departments, roles, and permissions."
+        description="Workspace configuration, departments, skills, roles, and permissions."
       />
 
-      {canManageDepts ? (
-        <div className="rounded-lg border bg-card text-card-foreground">
-          <Link
-            href={`/${tenantSlug}/settings/departments`}
-            className="flex items-center gap-4 p-5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background">
-              <Building2 className="h-5 w-5 text-muted-foreground" aria-hidden />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-medium">Departments</span>
-              <span className="block text-sm text-muted-foreground">
-                Create and manage the departments in this workspace.
-              </span>
-            </span>
-            <ChevronRight
-              className="h-5 w-5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-          </Link>
-        </div>
+      {cards.length > 0 ? (
+        <ul className="space-y-3">
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <li
+                key={card.href}
+                className="rounded-lg border bg-card text-card-foreground"
+              >
+                <Link
+                  href={card.href}
+                  className="flex items-center gap-4 p-5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background">
+                    <Icon className="h-5 w-5 text-muted-foreground" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{card.title}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {card.description}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="h-5 w-5 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       ) : (
         <ComingSoon branch="feature/department-management" />
       )}
