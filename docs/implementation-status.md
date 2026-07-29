@@ -3,13 +3,13 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — department **access scoping** shipped
-  (**PR #20**) on top of department management (**PR #17**) and the employee directory (**#15/#16**).
+- **Current focus:** Phase 3 (organisation & workforce) — the **skill catalog** shipped (**PR #23**)
+  on top of departments (management + access) and the employee directory.
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
-- **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0012`, RLS,
-  tenancy — Docker required) + the **hosted** project, carrying migrations `0001–0011` (the `0012`
-  employees migration is **not yet pushed to hosted** — see Manual configuration steps).
+- **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0013`, RLS,
+  tenancy — Docker required) + the **hosted** project, carrying migrations `0001–0011` (migrations
+  `0012` employees and `0013` skills are **not yet pushed to hosted** — see Manual configuration).
 
 **How to read this:** a requirement is only listed under **Completed** if it was
 **exercised end-to-end against the live backend**. Anything implemented but not yet run
@@ -18,7 +18,83 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-28: department access scoping (Phase 3)
+## Latest — 2026-07-28: skill catalog (Phase 3, Epic J1)
+
+Staff records gain a competency vocabulary (**PR #23**, merged). This is the **catalog** half of
+Epic J1; assigning skills to staff (an employee detail view) is the immediate next branch — the
+same catalog-then-assignment split used for departments.
+
+### ✅ Completed requirements (verified)
+
+- **`skills` + `employee_skills` tables** (migration `0013`): `skills` is a tenant-scoped catalog
+  (unique name per tenant, lifecycle status); `employee_skills` links staff to skills
+  (unique `(employee_id, skill_id)`, `tenant_id` denormalised for RLS). **Reuses the `staff.manage`
+  permission** from `0012` — no new permission.
+- **Deny-by-default RLS:** any tenant member reads the catalog/assignments; only `staff.manage`
+  holders (owner/admin/manager) write — both tables.
+- **Skill catalog UI** at `/settings/skills` (+ `/new`, `/[id]/edit`): list (name, **staff count**,
+  status), create, edit (rename, archive). Staff count is a PostgREST aggregate embed on
+  `employee_skills`. A duplicate name (unique per tenant) surfaces as a **friendly field error**
+  (Postgres `23505`), not a crash. Archiving is the soft-delete.
+- **Settings hub now renders multiple cards.** Owner/admin see **Departments**; managers
+  (`staff.manage`) see **Skills**; a member with neither keeps the placeholder.
+- **Server actions re-resolve the tenant** server-side and write through the RLS-aware client; every
+  write is gated on `staff.manage` at the DB.
+- **Isolation suite extended 36 → 42 (verified locally + CI).** `supabase db reset` applies
+  `0001–0013` + seed; `supabase test db` → **42/42**. New cases: skills read-isolation (each user
+  sees only their own tenant's skills, zero of the other's), and a viewer (no `staff.manage`) is
+  rejected `42501` on **both** a skill insert and an employee_skill insert. App gate green (format,
+  lint, typecheck, **31 tests**, build).
+- **Browser E2E on local Supabase (verified end-to-end).** As the demo owner: the Settings hub
+  showed both cards; the catalog listed the seeded skills with correct **staff counts**; created a
+  skill; hit the **duplicate-name** field error (no crash); edited a skill to **Archived** (persisted
+  + re-rendered). As a Riverside **viewer**: `/settings/skills` **redirected** to `/settings` and no
+  Skills card was shown. No console errors.
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **No skill assignment UI yet.** `employee_skills` exists (+ seed + tests), but nothing in the app
+  writes it — the employee detail view + assign-skills flow is the immediate next branch. Until then
+  staff counts come only from seed.
+- **No "grade" concept.** Epic J1 also mentions a grade/band; modelled as a future refinement
+  (likely on `feature/employee-contracts`), not this branch.
+- **No audit-on-write** for skill create/edit (wire in when `src/lib/audit` lands).
+- **Migrations `0012`/`0013` not on hosted.** Local + CI are at `0013`; hosted is still at `0011`.
+- **Status badge "Safe"** for active rows and the two email-blocked Phase 1 auth flows — unchanged.
+
+### Manual configuration steps
+
+- None new. DB verification uses the existing local flow (`supabase db reset` + `supabase test db`;
+  `supabase start -x storage-api` on Windows). Push `0012`+`0013` to hosted with `supabase db push`
+  when parity is needed.
+
+### Security considerations
+
+- **Skill writes are DB-gated on `staff.manage`** (owner/admin/manager), proven by the 42/42 suite
+  (viewer → 42501 on both tables) and observed in the browser (viewer redirected, no card).
+- **Cross-tenant reads are impossible** — `skills_select`/`employee_skills_select` are
+  `app.is_member(tenant_id)`; the suite asserts each user sees zero of the other tenant's skills.
+- **Server actions re-resolve the tenant** and scope every write to it, so a tampered
+  `tenantSlug`/`skillId` can't reach another workspace's rows.
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local) — migrations 0001-0013 + seed; expect 42/42
+supabase db reset && supabase test db
+
+# Push employees + skills migrations to hosted (optional, when parity is needed)
+supabase db push
+
+# Next Phase 3 branch: feature/employee-skill-assignment (employee detail view + assign skills)
+```
+
+---
+
+## 2026-07-28: department access scoping (Phase 3)
 
 Activates the department scoping that already had RLS + tests (migrations `0008/0009`): owner/admin
 choose which members are scoped to a department (**PR #20**, merged). No schema change — hosted
