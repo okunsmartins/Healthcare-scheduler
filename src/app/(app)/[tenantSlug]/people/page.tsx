@@ -129,7 +129,12 @@ export default async function PeoplePage({
               {employees.map((e) => (
                 <tr key={e.id} className="border-b last:border-0">
                   <td className="px-4 py-3">
-                    <span className="font-medium text-foreground">{e.fullName}</span>
+                    <Link
+                      href={`/${tenantSlug}/people/${e.id}`}
+                      className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {e.fullName}
+                    </Link>
                     {e.email ? (
                       <span className="block text-xs text-muted-foreground">
                         {e.email}

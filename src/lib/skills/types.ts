@@ -12,6 +12,19 @@ export interface Skill {
   employeeCount: number;
 }
 
+/** A skill an employee holds (for the detail-view badges). */
+export interface HeldSkill {
+  id: string;
+  name: string;
+}
+
+/** An active catalog skill on the assignment screen, flagged with whether the employee holds it. */
+export interface SkillOption {
+  skillId: string;
+  name: string;
+  assigned: boolean;
+}
+
 /** Lifecycle statuses in the order they appear in the edit form. */
 export const SKILL_STATUS: SkillStatus[] = ['active', 'suspended', 'archived'];
 

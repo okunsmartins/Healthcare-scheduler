@@ -6,7 +6,7 @@
 -- that a member without the relevant permission cannot write (staff.manage / departments.manage).
 
 begin;
-select plan(42);
+select plan(44);
 
 -- Four auth users (the trigger creates their profiles). A and B get a tenant each; C has
 -- none (used to test self-serve workspace creation via create_tenant); D is a viewer of
@@ -101,6 +101,7 @@ select count(*)::int as a_employees_b from public.employees
 select count(*)::int as a_skills      from public.skills \gset
 select count(*)::int as a_skills_b    from public.skills
   where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
+select count(*)::int as a_emp_skills  from public.employee_skills \gset
 reset role;
 
 select is(:a_tenants,     1, 'User A sees exactly one tenant');
@@ -117,6 +118,7 @@ select is(:a_employees,   2, 'User A sees their tenant''s employees');
 select is(:a_employees_b, 0, 'User A cannot see Tenant B employees');
 select is(:a_skills,      2, 'User A sees their tenant''s skills');
 select is(:a_skills_b,    0, 'User A cannot see Tenant B skills');
+select is(:a_emp_skills,  1, 'User A sees their tenant''s skill assignments');
 
 -- ===== As User B (unrestricted) =====
 set local role authenticated;
@@ -138,6 +140,8 @@ select count(*)::int as b_employees_a from public.employees
 select count(*)::int as b_skills      from public.skills \gset
 select count(*)::int as b_skills_a    from public.skills
   where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
+select count(*)::int as b_emp_skills_a from public.employee_skills
+  where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
 reset role;
 
 select is(:b_tenants,     1, 'User B sees exactly one tenant');
@@ -152,6 +156,7 @@ select is(:b_employees,   1, 'User B sees their tenant''s employee');
 select is(:b_employees_a, 0, 'User B cannot see Tenant A employees');
 select is(:b_skills,      1, 'User B sees their tenant''s skill');
 select is(:b_skills_a,    0, 'User B cannot see Tenant A skills');
+select is(:b_emp_skills_a, 0, 'User B cannot see Tenant A skill assignments');
 
 -- The audit trail is append-only for API roles (writes go via app.log_audit / service role).
 select ok(has_table_privilege('authenticated', 'public.audit_events', 'SELECT'),
