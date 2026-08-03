@@ -3,8 +3,8 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — the **skill catalog** shipped (**PR #23**)
-  on top of departments (management + access) and the employee directory.
+- **Current focus:** Phase 3 (organisation & workforce) — **Epic J1 complete**: employee detail
+  view + skill assignment (**PR #25**) on top of the skill catalog (**PR #23**) and departments.
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
 - **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0013`, RLS,
@@ -18,7 +18,77 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-28: skill catalog (Phase 3, Epic J1)
+## Latest — 2026-07-30: employee detail view + skill assignment (Phase 3, Epic J1 complete)
+
+You can now view a staff member and manage the skills they hold (**PR #25**, merged) — the second
+half of Epic J1, completing "view a worker's skills." No schema change (reuses `skills` +
+`employee_skills` from `0013`), so hosted parity is unaffected.
+
+### ✅ Completed requirements (verified)
+
+- **Employee detail view** at `/people/[id]`: info (job title, employment type, email, status) plus
+  the skills the employee holds as badges. The People directory now links each name to this page.
+- **Manage skills** at `/people/[id]/skills` — a manager-gated checklist of the tenant's **active**
+  catalog skills, each flagged with whether the employee holds it. **Save reconciles**
+  `employee_skills` with the minimal inserts/deletes.
+- **`getEmployeeSkills`** (held skills, for badges) and **`getSkillAssignment`** (active catalog +
+  assigned flag). **`setEmployeeSkillsAction`** re-resolves the tenant, **intersects submitted ids
+  with the active catalog** (a forged or archived id can't be linked), and RLS-gates every write on
+  `staff.manage`. Archived skills the employee already holds are left untouched.
+- **Isolation suite extended 42 → 44 (verified locally + CI).** `supabase db reset` applies
+  `0001–0013` + seed; `supabase test db` → **44/44**. New cases: `employee_skills` read-isolation
+  (each user sees only their own tenant's assignments). The `employee_skills` write-gate was already
+  proven in the catalog branch (PR #23). App gate green (format, lint, typecheck, **31 tests**, build).
+- **Browser E2E on local Supabase, with direct DB confirmation.** As the demo owner: the detail view
+  rendered Aoife's held skills as badges; assigned a skill (a `employee_skills` row was created,
+  confirmed by SQL, and the badge appeared); removed one (row deleted). As a Riverside **viewer**: the
+  detail page rendered **read-only** (no Edit / Manage skills) and `/people/[id]/skills`
+  **redirected** to the detail page. No console errors.
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **No "grade/band" concept yet.** Epic J1 also mentions a grade; deferred to a future refinement
+  (likely `feature/employee-contracts`).
+- **No audit-on-write** for skill assignment (wire in when `src/lib/audit` lands).
+- **Migrations `0012`/`0013` not on hosted.** Local + CI are at `0013`; hosted is still at `0011`.
+- **Status badge "Safe"** for active rows and the two email-blocked Phase 1 auth flows — unchanged.
+
+### Manual configuration steps
+
+- None new. DB verification uses the existing local flow (`supabase db reset` + `supabase test db`;
+  `supabase start -x storage-api` on Windows). Push `0012`+`0013` to hosted with `supabase db push`
+  when parity is needed.
+
+### Security considerations
+
+- **Skill-assignment writes are DB-gated on `staff.manage`** (owner/admin/manager) — the page guard
+  and hidden controls are convenience; RLS is authoritative (proven by the 44/44 suite and the
+  viewer-redirect observed in the browser).
+- **Submitted skill ids are intersected with the tenant's active catalog** before any insert, so a
+  tampered form can't link an arbitrary/foreign/archived skill; the tenant is re-resolved server-side
+  and scopes every write.
+- **`employee_skills` reads are tenant-scoped** (`app.is_member`), asserted in the suite (each user
+  sees zero of the other tenant's assignments).
+
+### Exact commands to continue
+
+```bash
+# App gate
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# DB / RLS (local) — migrations 0001-0013 + seed; expect 44/44
+supabase db reset && supabase test db
+
+# Push employees + skills migrations to hosted (optional, when parity is needed)
+supabase db push
+
+# Next Phase 3 options: facility management, employee contracts (grade/band), availability,
+# member invites — or pivot to Phase 4 rostering (the core engine).
+```
+
+---
+
+## 2026-07-28: skill catalog (Phase 3, Epic J1)
 
 Staff records gain a competency vocabulary (**PR #23**, merged). This is the **catalog** half of
 Epic J1; assigning skills to staff (an employee detail view) is the immediate next branch — the
