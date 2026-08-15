@@ -3,8 +3,9 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — **Epic J1 complete**: employee detail
-  view + skill assignment (**PR #25**) on top of the skill catalog (**PR #23**) and departments.
+- **Current focus:** Phase 3 (organisation & workforce) — employee detail view + skill assignment
+  (**PR #25**) on top of the skill catalog (**PR #23**) and departments. This covers the **skills +
+  status** part of Epic J1; **grade and department-eligibility are still outstanding**.
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
   switcher, departments, audit).
 - **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0013`, RLS,
@@ -18,11 +19,12 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-30: employee detail view + skill assignment (Phase 3, Epic J1 complete)
+## Latest — 2026-07-30: employee detail view + skill assignment (Phase 3, Epic J1: skills + status)
 
-You can now view a staff member and manage the skills they hold (**PR #25**, merged) — the second
-half of Epic J1, completing "view a worker's skills." No schema change (reuses `skills` +
-`employee_skills` from `0013`), so hosted parity is unaffected.
+You can now view a staff member and manage the skills they hold (**PR #25**, merged). This delivers
+the **skills, status, and contact-details** parts of Epic J1's detail view; the AC also calls for
+**grade** and **department-eligibility**, which are **not built** (see Outstanding). No schema change
+(reuses `skills` + `employee_skills` from `0013`), so hosted parity is unaffected.
 
 ### ✅ Completed requirements (verified)
 
@@ -47,8 +49,11 @@ half of Epic J1, completing "view a worker's skills." No schema change (reuses `
 
 ### ⬜ Outstanding / deferred (not "done")
 
-- **No "grade/band" concept yet.** Epic J1 also mentions a grade; deferred to a future refinement
-  (likely `feature/employee-contracts`).
+- **Epic J1 not fully done.** The AC's detail view also requires **grade** (a grade/band concept —
+  no schema yet, likely `feature/employee-contracts`) and **department-eligibility** (which
+  departments a *worker* may be booked into — distinct from the member↔department access scoping we
+  built; needs an `employee_departments` link). Both are outstanding; only skills + status + contact
+  are done.
 - **No audit-on-write** for skill assignment (wire in when `src/lib/audit` lands).
 - **Migrations `0012`/`0013` not on hosted.** Local + CI are at `0013`; hosted is still at `0011`.
 - **Status badge "Safe"** for active rows and the two email-blocked Phase 1 auth flows — unchanged.
