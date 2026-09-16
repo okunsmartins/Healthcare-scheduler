@@ -3,14 +3,17 @@
 Living status of the build against the specification in [`README.md`](../README.md),
 [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
-- **Current focus:** Phase 3 (organisation & workforce) — employee detail view + skill assignment
-  (**PR #25**) on top of the skill catalog (**PR #23**) and departments. This covers the **skills +
-  status** part of Epic J1; **grade and department-eligibility are still outstanding**.
+- **Current focus:** **Phase 4 (Rostering) started** — the shift-type catalog shipped (**PR #29**),
+  the first building block of the roster engine, on top of a substantially complete Phase 3.
 - **Base:** `main` — Phase 1 ✅ and Phase 2 ✅ merged (foundation, shell, auth, CI; tenancy,
-  switcher, departments, audit).
-- **Verification backends:** a **local** Supabase stack via the CLI (migrations `0001–0013`, RLS,
-  tenancy — Docker required) + the **hosted** project, carrying migrations `0001–0011` (migrations
-  `0012` employees and `0013` skills are **not yet pushed to hosted** — see Manual configuration).
+  switcher, departments, audit); Phase 3 org/workforce largely done (onboarding, employee directory
+  + skills, departments + access).
+- **Dev/verification workflow (changed):** **hosted-for-dev + CI-for-tests** is now the default
+  (**PR #28**) — no Docker needed day-to-day. The **RLS isolation suite runs in CI** on every PR and
+  is the verification of record for tenant isolation; the local Supabase stack (Docker) is optional.
+- **Backends:** local Supabase covers migrations `0001–0014`; the **hosted** project still carries
+  only `0001–0011` (migrations `0012`–`0014` **not yet pushed to hosted** — needs an un-pause + `db
+  push`; see [`DEPLOYMENT.md`](DEPLOYMENT.md)).
 
 **How to read this:** a requirement is only listed under **Completed** if it was
 **exercised end-to-end against the live backend**. Anything implemented but not yet run
@@ -19,7 +22,77 @@ against a real Supabase response is under **Implemented but not verified** — i
 
 ---
 
-## Latest — 2026-07-30: employee detail view + skill assignment (Phase 3, Epic J1: skills + status)
+## Latest — 2026-09-16: shift-type catalog — Phase 4 begins
+
+The first roster building block (**PR #29**, merged): a tenant catalog of shift patterns
+(name + start/end times) that rosters will be built from. Same catalog pattern as
+departments/skills; **gated on the existing `roster.edit` permission** (owner/admin/manager/
+scheduler) — no new permission.
+
+### ✅ Completed requirements (verified)
+
+- **`shift_types` table** (migration `0014`): `tenant_id`, `name` (unique per tenant),
+  `start_time`/`end_time` (`time`), lifecycle `status`, timestamps. `end_time <= start_time` means
+  the shift **crosses midnight** (e.g. Night 20:00→08:00) — duration/overnight are **derived in the
+  app**, not stored. Deny-by-default RLS: any member reads; only `roster.edit` holders write.
+- **Shift-type catalog UI** at `/settings/shift-types` (+ `/new`, `/[id]/edit`): list (name, time
+  range, derived length, an overnight moon icon, status), create, edit (rename/retime/archive).
+  Times validated `HH:MM`; a duplicate name surfaces as a **friendly field error** (Postgres
+  `23505`). Settings hub gains a **Shift types** card (shown to `roster.edit` holders).
+- **Server actions re-resolve the tenant** server-side and write through the RLS-aware client; every
+  write is gated on `roster.edit` at the DB.
+- **Isolation suite extended 44 → 49 — verified in CI.** New cases: `shift_types` read-isolation
+  (each user sees only their own tenant's shift types) and a viewer (has `roster.view` but not
+  `roster.edit`) is rejected `42501` on insert. **PR #29's *RLS isolation test* job passed green**,
+  which is the verification of record (local Docker was unavailable this run — see workflow note).
+- **App gate green:** format, lint, typecheck, **31 unit tests**, build (3 new routes).
+
+### ⬜ Outstanding / deferred (not "done")
+
+- **No roster yet.** Shift *types* exist, but nothing schedules them: staffing requirements, roster
+  periods, shift **instances** (a shift on a date for a department), and staff **assignment** are the
+  next Phase 4 branches — that's the "Demo v0" vertical slice.
+- **No browser E2E for this branch.** Local Docker was wedged, so the create/edit/archive flow was
+  **not** click-tested against a running app; correctness rests on the CI isolation suite + the app
+  gate. Worth a browser pass once dev runs against hosted.
+- **No audit-on-write** for shift-type changes (wire in when `src/lib/audit` lands).
+- **Migrations `0012`–`0014` not on hosted.** Local + CI at `0014`; hosted still `0011`.
+- **Epic J1 remainder** (grade, department-eligibility) and the "Safe" badge label — unchanged.
+
+### Manual configuration steps
+
+- **Dev now targets hosted by default** (no Docker). To activate: un-pause the Supabase project,
+  `supabase db push` (brings hosted to `0014`), delete the gitignored `.env.development.local`
+  override. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
+- Local Supabase stack remains optional (Docker) for offline work — `supabase start` +
+  `supabase db reset` (`-x storage-api` on Windows).
+
+### Security considerations
+
+- **Shift-type writes are DB-gated on `roster.edit`** — proven by the 49/49 suite (viewer → 42501)
+  in CI. The Settings card + page guards are convenience; RLS is authoritative.
+- **Cross-tenant reads are impossible** — `shift_types_select` is `app.is_member(tenant_id)`; the
+  suite asserts each user sees zero of the other tenant's shift types.
+- **Server actions re-resolve the tenant** and scope every write to it.
+
+### Exact commands to continue
+
+```bash
+# App gate (no Docker)
+npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build
+
+# RLS isolation suite — runs in CI on every PR (verification of record). Optional locally:
+supabase db reset && supabase test db   # needs the local stack (Docker); expect 49/49
+
+# Bring hosted up to date (once un-paused + SUPABASE_DB_PASSWORD set)
+supabase db push
+
+# Next Phase 4 branch: staffing requirements or shift instances (a shift on a date for a dept)
+```
+
+---
+
+## 2026-07-30: employee detail view + skill assignment (Phase 3, Epic J1: skills + status)
 
 You can now view a staff member and manage the skills they hold (**PR #25**, merged). This delivers
 the **skills, status, and contact-details** parts of Epic J1's detail view; the AC also calls for
