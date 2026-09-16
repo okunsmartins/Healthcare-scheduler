@@ -12,7 +12,7 @@ export {
 
 // Single string literal (not concatenated) so supabase-js can infer the row shape.
 const SHIFT_INSTANCE_COLUMNS =
-  'id, shift_date, required_staff, notes, status, departments(id, name), shift_types(id, name, start_time, end_time)';
+  'id, shift_date, required_staff, notes, status, departments(id, name), shift_types(id, name, start_time, end_time), shift_assignments(count)';
 
 /** Postgres `time` comes back "HH:MM:SS"; trim to "HH:MM". */
 function toHHMM(value: unknown): string {
@@ -27,10 +27,12 @@ function toShiftInstance(row: Record<string, unknown>): ShiftInstance {
     start_time: string;
     end_time: string;
   } | null;
+  const assignments = row.shift_assignments as { count: number }[] | null | undefined;
   return {
     id: row.id as string,
     date: row.shift_date as string,
     requiredStaff: row.required_staff as number,
+    assignedCount: assignments?.[0]?.count ?? 0,
     notes: (row.notes as string | null) ?? null,
     status: row.status as ShiftInstanceStatus,
     department: { id: dept?.id ?? '', name: dept?.name ?? 'Unknown department' },

@@ -136,3 +136,18 @@ from (values
   ('ED',  'Long Day', 2, 3, null)
 ) as v (dept_code, type_name, day_offset, required_staff, notes)
 on conflict (tenant_id, department_id, shift_date, shift_type_id) do nothing;
+
+-- Book two staff onto today's Emergency Long Day shift (needs 3 → shows 2/3 staffed).
+insert into public.shift_assignments (tenant_id, shift_instance_id, employee_id)
+select
+  'a0000000-0000-0000-0000-0000000000a1',
+  (select si.id
+     from public.shift_instances si
+     join public.departments d on d.id = si.department_id
+     join public.shift_types t on t.id = si.shift_type_id
+     where si.tenant_id = 'a0000000-0000-0000-0000-0000000000a1'
+       and d.code = 'ED' and t.name = 'Long Day' and si.shift_date = current_date),
+  (select id from public.employees
+     where tenant_id = 'a0000000-0000-0000-0000-0000000000a1' and full_name = e.name)
+from (values ('Aoife Byrne'), ('Conor Walsh')) as e (name)
+on conflict (shift_instance_id, employee_id) do nothing;

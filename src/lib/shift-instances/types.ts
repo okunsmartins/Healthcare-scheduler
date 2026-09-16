@@ -9,6 +9,8 @@ export interface ShiftInstance {
   /** ISO date "YYYY-MM-DD". */
   date: string;
   requiredStaff: number;
+  /** How many staff are currently booked onto this shift. */
+  assignedCount: number;
   notes: string | null;
   status: ShiftInstanceStatus;
   department: { id: string; name: string };

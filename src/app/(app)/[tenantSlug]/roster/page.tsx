@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Moon, Pencil, Plus } from 'lucide-react';
+import { Moon, Pencil, Plus, Users } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils/cn';
 import { resolveTenantContext } from '@/lib/tenancy';
@@ -13,6 +13,7 @@ import {
   type ShiftInstance,
 } from '@/lib/shift-instances';
 import { isOvernight } from '@/lib/shift-types';
+import { canAssignStaff } from '@/lib/shift-assignments';
 
 export const metadata: Metadata = { title: 'Roster' };
 
@@ -40,6 +41,7 @@ export default async function RosterPage({
 
   const instances = await getShiftInstances(tenant.id);
   const canManage = canManageRoster(tenant.roleKey);
+  const canAssign = canAssignStaff(tenant.roleKey);
   const groups = groupByDate(instances);
 
   return (
@@ -105,8 +107,19 @@ export default async function RosterPage({
                           <td className="px-4 py-3 text-muted-foreground">
                             {s.department.name}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {s.requiredStaff} needed
+                          <td className="px-4 py-3">
+                            <span
+                              className={cn(
+                                'text-xs font-medium',
+                                cancelled
+                                  ? 'text-muted-foreground'
+                                  : s.assignedCount >= s.requiredStaff
+                                    ? 'text-safe'
+                                    : 'text-warning',
+                              )}
+                            >
+                              {s.assignedCount}/{s.requiredStaff} staffed
+                            </span>
                           </td>
                           <td className="px-4 py-3">
                             {s.status === 'active' ? (
@@ -126,20 +139,35 @@ export default async function RosterPage({
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            {canManage ? (
-                              <Link
-                                href={`/${tenantSlug}/roster/${s.id}/edit`}
-                                className={cn(
-                                  buttonVariants({ variant: 'ghost', size: 'sm' }),
-                                  'text-muted-foreground',
-                                )}
-                                aria-label={`Edit ${s.shiftType.name} on ${group.date}`}
-                              >
-                                <Pencil className="h-4 w-4" aria-hidden />
-                                Edit
-                              </Link>
-                            ) : null}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              {canAssign && !cancelled ? (
+                                <Link
+                                  href={`/${tenantSlug}/roster/${s.id}/assign`}
+                                  className={cn(
+                                    buttonVariants({ variant: 'ghost', size: 'sm' }),
+                                    'text-muted-foreground',
+                                  )}
+                                  aria-label={`Assign staff to ${s.shiftType.name} on ${group.date}`}
+                                >
+                                  <Users className="h-4 w-4" aria-hidden />
+                                  Assign
+                                </Link>
+                              ) : null}
+                              {canManage ? (
+                                <Link
+                                  href={`/${tenantSlug}/roster/${s.id}/edit`}
+                                  className={cn(
+                                    buttonVariants({ variant: 'ghost', size: 'sm' }),
+                                    'text-muted-foreground',
+                                  )}
+                                  aria-label={`Edit ${s.shiftType.name} on ${group.date}`}
+                                >
+                                  <Pencil className="h-4 w-4" aria-hidden />
+                                  Edit
+                                </Link>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );
