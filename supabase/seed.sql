@@ -115,3 +115,24 @@ insert into public.shift_types (tenant_id, name, start_time, end_time) values
   ('a0000000-0000-0000-0000-0000000000a1', 'Long Day',  '08:00', '20:00'),
   ('a0000000-0000-0000-0000-0000000000a1', 'Night',     '20:00', '08:00')
 on conflict (tenant_id, name) do nothing;
+
+-- A small upcoming roster for St Mary's, relative to today so it always shows as upcoming.
+-- Departments and shift types are looked up by name within the tenant.
+insert into public.shift_instances (tenant_id, department_id, shift_type_id, shift_date, required_staff, notes)
+select
+  'a0000000-0000-0000-0000-0000000000a1',
+  (select id from public.departments where tenant_id = 'a0000000-0000-0000-0000-0000000000a1' and code = v.dept_code),
+  (select id from public.shift_types where tenant_id = 'a0000000-0000-0000-0000-0000000000a1' and name = v.type_name),
+  current_date + v.day_offset,
+  v.required_staff,
+  v.notes
+from (values
+  ('ED',  'Long Day', 0, 3, null),
+  ('ED',  'Night',    0, 2, 'Extra cover for the weekend'),
+  ('MAT', 'Early',    0, 2, null),
+  ('ED',  'Long Day', 1, 3, null),
+  ('ED',  'Night',    1, 2, null),
+  ('MAT', 'Late',     1, 2, null),
+  ('ED',  'Long Day', 2, 3, null)
+) as v (dept_code, type_name, day_offset, required_staff, notes)
+on conflict (tenant_id, department_id, shift_date, shift_type_id) do nothing;

@@ -6,7 +6,7 @@
 -- that a member without the relevant permission cannot write (staff.manage / departments.manage).
 
 begin;
-select plan(49);
+select plan(54);
 
 -- Four auth users (the trigger creates their profiles). A and B get a tenant each; C has
 -- none (used to test self-serve workspace creation via create_tenant); D is a viewer of
@@ -77,11 +77,18 @@ insert into public.employee_skills (tenant_id, employee_id, skill_id) values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
    'ee111111-1111-1111-1111-111111111111', 'ff111111-1111-1111-1111-111111111111');
 
--- Shift types: two in Tenant A, one in Tenant B.
-insert into public.shift_types (tenant_id, name, start_time, end_time) values
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Day',   '08:00', '20:00'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Night', '20:00', '08:00'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Theatre AM', '07:30', '13:30');
+-- Shift types: two in Tenant A, one in Tenant B (explicit ids for the shift_instances below).
+insert into public.shift_types (id, tenant_id, name, start_time, end_time) values
+  ('cc111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Day',   '08:00', '20:00'),
+  ('cc222222-2222-2222-2222-222222222222', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Night', '20:00', '08:00'),
+  ('cc333333-3333-3333-3333-333333333333', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Theatre AM', '07:30', '13:30');
+
+-- Shift instances: one in Tenant A (Emergency/Day), one in Tenant B (Theatre/Theatre AM).
+insert into public.shift_instances (tenant_id, department_id, shift_type_id, shift_date, required_staff) values
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'aa111111-1111-1111-1111-111111111111',
+   'cc111111-1111-1111-1111-111111111111', '2026-01-05', 2),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'bb111111-1111-1111-1111-111111111111',
+   'cc333333-3333-3333-3333-333333333333', '2026-01-05', 1);
 
 -- ===== As User A (scoped to Emergency) =====
 set local role authenticated;
@@ -111,6 +118,9 @@ select count(*)::int as a_emp_skills  from public.employee_skills \gset
 select count(*)::int as a_shift_types from public.shift_types \gset
 select count(*)::int as a_shift_types_b from public.shift_types
   where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
+select count(*)::int as a_shifts       from public.shift_instances \gset
+select count(*)::int as a_shifts_b     from public.shift_instances
+  where tenant_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' \gset
 reset role;
 
 select is(:a_tenants,     1, 'User A sees exactly one tenant');
@@ -130,6 +140,8 @@ select is(:a_skills_b,    0, 'User A cannot see Tenant B skills');
 select is(:a_emp_skills,  1, 'User A sees their tenant''s skill assignments');
 select is(:a_shift_types,   2, 'User A sees their tenant''s shift types');
 select is(:a_shift_types_b, 0, 'User A cannot see Tenant B shift types');
+select is(:a_shifts,        1, 'User A sees their tenant''s shift instances');
+select is(:a_shifts_b,      0, 'User A cannot see Tenant B shift instances');
 
 -- ===== As User B (unrestricted) =====
 set local role authenticated;
@@ -156,6 +168,9 @@ select count(*)::int as b_emp_skills_a from public.employee_skills
 select count(*)::int as b_shift_types   from public.shift_types \gset
 select count(*)::int as b_shift_types_a from public.shift_types
   where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
+select count(*)::int as b_shifts        from public.shift_instances \gset
+select count(*)::int as b_shifts_a      from public.shift_instances
+  where tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' \gset
 reset role;
 
 select is(:b_tenants,     1, 'User B sees exactly one tenant');
@@ -173,6 +188,8 @@ select is(:b_skills_a,    0, 'User B cannot see Tenant A skills');
 select is(:b_emp_skills_a, 0, 'User B cannot see Tenant A skill assignments');
 select is(:b_shift_types,   1, 'User B sees their tenant''s shift type');
 select is(:b_shift_types_a, 0, 'User B cannot see Tenant A shift types');
+select is(:b_shifts,        1, 'User B sees their tenant''s shift instance');
+select is(:b_shifts_a,      0, 'User B cannot see Tenant A shift instances');
 
 -- The audit trail is append-only for API roles (writes go via app.log_audit / service role).
 select ok(has_table_privilege('authenticated', 'public.audit_events', 'SELECT'),
@@ -252,6 +269,16 @@ select throws_ok(
        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Forged', '09:00', '17:00') $$,
   '42501', NULL,
   'A viewer cannot add a shift type (no roster.edit)');
+-- Nor schedule a shift instance (also roster.edit). Use the Night type (cc222222) on the same
+-- date as the seeded Day instance, so it's a distinct row and only the RLS check can fire.
+select throws_ok(
+  $$ insert into public.shift_instances
+       (tenant_id, department_id, shift_type_id, shift_date, required_staff)
+       values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+               'aa111111-1111-1111-1111-111111111111',
+               'cc222222-2222-2222-2222-222222222222', '2026-01-05', 1) $$,
+  '42501', NULL,
+  'A viewer cannot schedule a shift instance (no roster.edit)');
 reset role;
 
 -- ===== Self-serve onboarding: User C (no memberships) creates a workspace =====
