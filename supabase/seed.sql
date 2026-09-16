@@ -107,3 +107,11 @@ where e.tenant_id = 'a0000000-0000-0000-0000-0000000000a1'
     ('Conor Walsh', 'Manual Handling')
   )
 on conflict (employee_id, skill_id) do nothing;
+
+-- Shift types for St Mary's (Night crosses midnight — end_time <= start_time).
+insert into public.shift_types (tenant_id, name, start_time, end_time) values
+  ('a0000000-0000-0000-0000-0000000000a1', 'Early',     '07:00', '15:00'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Late',      '13:00', '21:00'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Long Day',  '08:00', '20:00'),
+  ('a0000000-0000-0000-0000-0000000000a1', 'Night',     '20:00', '08:00')
+on conflict (tenant_id, name) do nothing;

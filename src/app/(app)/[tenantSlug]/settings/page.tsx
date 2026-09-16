@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Award, Building2, ChevronRight, type LucideIcon } from 'lucide-react';
+import {
+  Award,
+  Building2,
+  CalendarClock,
+  ChevronRight,
+  type LucideIcon,
+} from 'lucide-react';
 import { PageHeader, ComingSoon } from '@/components/shell/page-header';
 import { resolveTenantContext } from '@/lib/tenancy';
 import { canManageDepartments } from '@/lib/departments';
 import { canManageSkills } from '@/lib/skills';
+import { canManageShiftTypes } from '@/lib/shift-types';
 
 export const metadata: Metadata = { title: 'Settings' };
 
@@ -40,6 +47,14 @@ export default async function SettingsPage({
       icon: Award,
       title: 'Skills',
       description: 'Manage the competencies staff can hold.',
+    });
+  }
+  if (canManageShiftTypes(tenant.roleKey)) {
+    cards.push({
+      href: `/${tenantSlug}/settings/shift-types`,
+      icon: CalendarClock,
+      title: 'Shift types',
+      description: 'Define the shift patterns rosters are built from.',
     });
   }
 
