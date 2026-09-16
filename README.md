@@ -47,14 +47,51 @@ Vitest · Playwright · GitHub Actions.
 
 ## Getting started
 
-> Full setup instructions live in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Once the
-> foundation branch is merged:
+The app talks to Supabase over env vars, so it runs against **either** a hosted project or a
+local stack. **Hosted is the default dev workflow** — no Docker needed. Database isolation
+(RLS) tests run in **CI** on every PR (see below), so you don't need to run them locally.
+
+### Recommended: hosted for dev
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in local Supabase values
+cp .env.example .env.local   # fill in your HOSTED Supabase project values
 npm run dev
 ```
+
+Point `.env.local` at your hosted project (URL + anon key from Supabase → Project Settings →
+API; service-role key for server-only use). Set `NEXT_PUBLIC_APP_URL` to `http://localhost:3000`
+for local dev. Full hosted setup — migrations, Vercel, auth URLs — is in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+### Optional: local Supabase stack (needs Docker)
+
+Only for offline work or a fast, disposable, pre-seeded DB. Requires Docker Desktop.
+
+```bash
+supabase start                 # boots Postgres + Auth + PostgREST in Docker
+supabase db reset              # applies migrations + seed (demo login: demo@local.test / DemoPass123!)
+# Point the dev server at it WITHOUT touching .env.local:
+#   create .env.development.local with NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321 (+ local keys)
+#   (that file is gitignored and overrides .env.local in `next dev`; delete it to return to hosted)
+npm run dev
+```
+
+> On Windows, Supabase's default ports collide with a reserved range — this repo remaps them to
+> `553xx` in `supabase/config.toml`, and the storage container's health check is flaky
+> (`supabase start -x storage-api` to skip it).
+
+### Tests
+
+```bash
+npm run test        # unit tests (Vitest) — no DB needed
+npm run build       # production build
+supabase test db    # RLS isolation suite (pgTAP) — needs the local stack (Docker)
+```
+
+The **RLS isolation suite runs in CI** (`.github/workflows/ci.yml` → *RLS isolation test*) on
+every pull request, in a clean container. That is the verification of record for tenant
+isolation, so running it locally is optional.
 
 ## Documentation
 
